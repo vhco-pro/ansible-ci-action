@@ -18,6 +18,8 @@ CONFIG_NAMES = (".ansible-lint", ".ansible-lint.yml", ".ansible-lint.yaml", ".co
 IGNORE_NAMES = (".ansible-lint-ignore", ".config/ansible-lint-ignore.txt")
 SAFE_CONFIG = {"profile", "verbosity", "var_naming_pattern", "loop_var_prefix", "enable_list", "only_builtins_allow_collections"}
 YAML_SUFFIXES = {".yml", ".yaml"}
+ROLE_ENTRY_NAMES = {"main", "main.yml", "main.yaml"}
+ROLE_ENTRY_DIRS = {"tasks", "handlers", "defaults", "vars", "meta"}
 CONTENT_LOCK = Path("ci/ansible-content.lock")
 TASK_KEYS = {
     "action", "local_action", "block", "rescue", "always", "register", "notify",
@@ -83,12 +85,12 @@ def lint_targets(scope):
     playbooks = []
     incomplete = set()
     for path in sorted(scope.rglob("*")):
-        if not path.is_file() or path.suffix not in YAML_SUFFIXES:
+        if not path.is_file() or any(part.startswith(".") for part in path.relative_to(scope).parts):
             continue
-        if any(part.startswith(".") for part in path.relative_to(scope).parts):
-            continue
-        if path.stem == "main" and path.parent.name == "tasks":
+        if path.name in ROLE_ENTRY_NAMES and path.parent.name in ROLE_ENTRY_DIRS:
             roles.add(path.parent.parent)
+            continue
+        if path.suffix not in YAML_SUFFIXES:
             continue
         keys, multi_document = yaml_shape(path.read_text())
         if keys & (PLAY_HEADERS | PLAY_BODY):
@@ -169,12 +171,11 @@ def changed_scopes(workspace, scope, inventory):
             return None
         if path.as_posix().endswith(CONFIG_NAMES + IGNORE_NAMES) or path.name == "ansible.cfg":
             return None
-        if any(part.startswith(".") for part in path.parts):
-            continue
-        if path.is_relative_to(scope) and set(path.relative_to(scope).parts[:-1]) & DEPENDENCY_DIRS:
-            return None
-        if path.suffix in YAML_SUFFIXES:
-            changed.append(path)
+        if path.is_relative_to(scope):
+            parents = path.relative_to(scope).parts[:-1]
+            if not any(part.startswith(".") for part in parents) and DEPENDENCY_DIRS.intersection(parents):
+                return None
+        changed.append(path)
     return changed
 
 
@@ -190,10 +191,12 @@ def select_targets(tree, scope, staged_changes, workspace):
         return targets, incomplete
     selected = []
     for relative, path in zip(staged_changes, paths, strict=True):
-        if not path.is_relative_to(scope):
+        if not path.is_relative_to(scope) or any(part.startswith(".") for part in relative.parts):
             continue
         if path in targets:
             selected.append(path)
+            continue
+        if path.suffix not in YAML_SUFFIXES:
             continue
         if path.is_file():
             text = path.read_text()

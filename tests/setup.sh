@@ -4,7 +4,8 @@ repo=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 scratch=$(mktemp -d)
 trap 'rm -rf -- "$scratch"' EXIT
 version=$("$repo/scripts/setup.sh" pin)
-[[ $version == 3.14.10 ]]
+expected=$(awk '$1 == "python" { print $2 }' "$repo/scripts/.tool-versions")
+[[ $version == "$expected" ]]
 printf 'invalid archive\n' > "$scratch/invalid.tar.gz"
 if "$repo/scripts/setup.sh" install "$scratch/tools" "$scratch/invalid.tar.gz" >"$scratch/log" 2>&1; then
   printf 'A wrong checksum passed.\n' >&2

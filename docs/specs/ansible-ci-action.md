@@ -85,6 +85,9 @@ Deliver one composite, its direct check script, native Git hook example, public 
 
       Evidence: The imported-task fixture passed outside the hook and then showed the missing staged refusal. After repair, both paths refused the short module name. Scope, check, hook, release and lint suites passed.
 
+- [x] T9 `scripts/check.py` and the native hook discover handler-only roles and select staged files referenced by a playbook regardless of suffix. Add regressions for both and check that unrelated edits still skip lint (AC-01, AC-03).
+      Evidence: The handler-only role and staged JSON variable file regressions first failed against the prior code. The full native check, scope and hook suites passed after the fix, including the unrelated Markdown edit and preservation of the index.
+
 ## Open Questions
 
 None.

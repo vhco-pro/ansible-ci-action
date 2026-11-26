@@ -2,7 +2,7 @@
 set -euo pipefail
 repo=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 if [[ $# -eq 0 ]]; then
-  for fixture in malformed metadata metadata-list yaml-stream inventory role staged-archive nested-ignore imported-task; do
+  for fixture in malformed metadata metadata-list yaml-stream inventory role staged-archive nested-ignore imported-task handler-only referenced-vars; do
     "$0" "$fixture"
   done
   exit 0
@@ -85,6 +85,38 @@ case "$case_name" in
     index=$(git write-tree)
     refuse 'fqcn[action-core]' "$hook"
     refuse 'fqcn[action-core]' "$ANSIBLE_CI_CHECK" --staged
+    test "$index" = "$(git write-tree)"
+    ;;
+  handler-only)
+    rm -- play.yml
+    mkdir -p roles/handler_only/handlers
+    handler=roles/handler_only/handlers/main.yml
+    cat >"$handler" <<'YAML'
+---
+- name: Report fixture
+  ansible.builtin.debug:
+    msg: synthetic
+YAML
+    commit_fixture "$handler"
+    export ANSIBLE_CI_WORKING_DIRECTORY=roles/handler_only
+    "$ANSIBLE_CI_CHECK"
+    sed -i 's/ansible.builtin.debug/debug/' "$handler"
+    git add -- "$handler"
+    refuse 'fqcn[action-core]' "$ANSIBLE_CI_CHECK"
+    refuse 'fqcn[action-core]' "$hook"
+    ;;
+  referenced-vars)
+    sed -i '/  tasks:/i\  vars_files: [variables.json]' play.yml
+    printf '%s\n' '{"message": "synthetic"}' > variables.json
+    commit_fixture play.yml variables.json
+    "$ANSIBLE_CI_CHECK"
+    printf '%s\n' '{"message": "updated"}' > variables.json
+    git add -- variables.json
+    index=$(git write-tree)
+    "$ANSIBLE_CI_CHECK" --staged >"$scratch/verify.log" 2>&1
+    grep -F '1 files processed' "$scratch/verify.log"
+    "$hook" >"$scratch/verify.log" 2>&1
+    grep -F '1 files processed' "$scratch/verify.log"
     test "$index" = "$(git write-tree)"
     ;;
   inventory)

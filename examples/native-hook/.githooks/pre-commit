@@ -6,24 +6,4 @@ scratch=$(mktemp)
 trap 'rm -f -- "$scratch"' EXIT
 git diff --cached --no-renames --name-only -z > "$scratch"
 [[ -s $scratch ]] || exit 0
-if git cat-file -e ':ci/ansible-content.lock' 2>/dev/null; then
-  "${ANSIBLE_CI_CHECK:?Set ANSIBLE_CI_CHECK to the pinned check script.}" --staged
-  exit 0
-fi
-inventory=
-if [[ -n ${ANSIBLE_CI_FIXTURE_INVENTORY:-} ]]; then
-  inventory=$(realpath -ms -- "$workspace/$ANSIBLE_CI_FIXTURE_INVENTORY")
-fi
-while IFS= read -r -d '' path; do
-  if [[ -n $inventory && $workspace/$path == "$inventory" ]]; then
-    "${ANSIBLE_CI_CHECK:?Set ANSIBLE_CI_CHECK to the pinned check script.}" --staged
-    exit 0
-  fi
-  case "$path" in
-    .github/*) continue ;;
-    *.yml|*.yaml|*.ansible-lint|*.ansible-lint-ignore|.config/ansible-lint-ignore.txt|*/.config/ansible-lint-ignore.txt|*ansible.cfg|ci/ansible-content.lock|roles/*|*/roles/*|templates/*|*/templates/*|files/*|*/files/*)
-      "${ANSIBLE_CI_CHECK:?Set ANSIBLE_CI_CHECK to the pinned check script.}" --staged
-      exit 0
-      ;;
-  esac
-done < "$scratch"
+"${ANSIBLE_CI_CHECK:?Set ANSIBLE_CI_CHECK to the pinned check script.}" --staged
