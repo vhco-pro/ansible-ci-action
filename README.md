@@ -26,7 +26,8 @@ If syntax checks need external Ansible content, include a tracked
 `ci/ansible-content.lock` in the checkout. Each entry in its `dependencies` list
 names a `kind` of `role` or `collection`, a checkout-relative `archive` path,
 an exact `version`, and the archive's `sha256`. Supply the locked archives and
-their transitive dependencies. Setup verifies hashes and installs locally
+their transitive dependencies. Role archives use one top-level directory
+whose name is the installed role name. Setup verifies hashes and installs locally
 with dependency fetching disabled.
 
 ## Local check and hook

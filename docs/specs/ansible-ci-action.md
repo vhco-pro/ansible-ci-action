@@ -44,11 +44,11 @@ Deliver one composite, its direct check script, native Git hook example, public 
 
 ## Acceptance Criteria
 
-- [ ] AC-01: Clean Ansible content passes the production profile and syntax checks. Production-rule violations, syntax failures, suppressed checks on selected content and empty scopes fail.
-      Evidence: R-5 reproduced a malformed sibling the action did not select.
+- [x] AC-01: Clean Ansible content passes the production profile and syntax checks. Production-rule violations, syntax failures, suppressed checks on selected content and empty scopes fail.
+      Evidence: tests/check.sh and tests/scope.sh malformed refused the expected diagnostics with a valid sibling present.
 - [ ] AC-02: The action uses its exact dependency pins, reports installed versions and rejects an invalid profile, an escaping path, dynamic inventory or failed setup. Syntax checking uses isolated synthetic inventory without ambient configuration or credentials.
-- [ ] AC-03: The direct command and native hook share validation behavior. Hook checks skip unrelated staged files, select affected Ansible content and use the index snapshot. The source and index stay intact.
-      Evidence: R-5 found that staged fixture inventory was missed and unrelated YAML triggered lint.
+- [x] AC-03: The direct command and native hook share validation behavior. Hook checks skip unrelated staged files, select affected Ansible content and use the index snapshot. The source and index stay intact.
+      Evidence: tests/hook.sh and the scope regressions verified staged inventory, unrelated YAML and unchanged index or source.
 - [ ] AC-04: The repository contains synthetic read-only public fixtures, lintable workflows and shared GitVersion release wiring that requires passing fixture tests before tagging.
 
 ## Test Plan
@@ -73,7 +73,9 @@ Deliver one composite, its direct check script, native Git hook example, public 
 - [x] T5 `action.yml`, `.github/workflows/`, and `README.md` wire the fixture and release jobs. Run `tests/release.sh` and `actionlint`. Observe the composite on a public runner when authorized (AC-02, AC-04).
       Evidence: actionlint, the release ref gate fixtures and direct pass and warning-only refusal cases passed locally with actual version outputs. Hosted composite execution remains pending.
 
-- [ ] T6 `scripts/check.py`, the native hook and scope fixtures check malformed plays, locked roles and relevant staged dependencies. Run `tests/scope.sh` and the native check and hook suites (AC-01, AC-02, AC-03).
+- [x] T6 `scripts/check.py`, the native hook and scope fixtures check malformed plays, locked roles and relevant staged dependencies. Run `tests/scope.sh` and the native check and hook suites (AC-01, AC-02, AC-03).
+
+      Evidence: The four scope fixtures failed before the fixes. All four passed after the fixes, along with the native check, staged hook, release guard and actionlint.
 
 ## Open Questions
 

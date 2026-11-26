@@ -3,6 +3,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -17,6 +18,9 @@ CONFIG_NAMES = (".ansible-lint", ".ansible-lint.yml", ".ansible-lint.yaml", ".co
 IGNORE_NAMES = (".ansible-lint-ignore", ".config/ansible-lint-ignore.txt")
 SAFE_CONFIG = {"profile", "verbosity", "var_naming_pattern", "loop_var_prefix", "enable_list", "only_builtins_allow_collections"}
 YAML_SUFFIXES = {".yml", ".yaml"}
+PLAY_HEADERS = {"hosts", "import_playbook"}
+PLAY_BODY = {"tasks", "pre_tasks", "post_tasks", "handlers", "roles", "gather_facts"}
+DEPENDENCY_DIRS = {"roles", "tasks", "handlers", "defaults", "vars", "templates", "files", "meta", "group_vars", "host_vars"}
 TOOL_BIN = Path(sys.executable).parent
 
 
@@ -54,48 +58,78 @@ def snapshot(workspace, tree, staged):
             raise ValueError(f"Tracked symlink escapes the checkout: {path.relative_to(tree)}")
 
 
+def yaml_keys(text):
+    node = yaml.compose(text)
+    if not isinstance(node, yaml.SequenceNode):
+        return set()
+    return {
+        key.value for entry in node.value if isinstance(entry, yaml.MappingNode)
+        for key, _ in entry.value if isinstance(key, yaml.ScalarNode)
+    }
+
+
 def lint_targets(scope):
     roles = set()
     playbooks = []
+    incomplete = set()
     for path in sorted(scope.rglob("*")):
         if not path.is_file() or path.suffix not in YAML_SUFFIXES:
             continue
+        if any(part.startswith(".") for part in path.relative_to(scope).parts):
+            continue
         if path.stem == "main" and path.parent.name == "tasks":
             roles.add(path.parent.parent)
-        if path.name.startswith(".") or any(part.startswith(".") for part in path.relative_to(scope).parts[:-1]):
             continue
-        node = yaml.compose(path.read_text())
-        if not isinstance(node, yaml.SequenceNode):
-            continue
-        for entry in node.value:
-            if isinstance(entry, yaml.MappingNode) and any(key.value in {"hosts", "import_playbook"} for key, _ in entry.value):
-                playbooks.append(path)
-                break
-    return sorted(roles) + [playbook for playbook in playbooks if not any(playbook.is_relative_to(role) for role in roles)]
+        keys = yaml_keys(path.read_text())
+        if keys & (PLAY_HEADERS | PLAY_BODY):
+            playbooks.append(path)
+            if not keys & PLAY_HEADERS:
+                incomplete.add(path)
+    targets = sorted(roles) + [playbook for playbook in playbooks if not any(playbook.is_relative_to(role) for role in roles)]
+    return targets, incomplete
 
 
-def changed_scopes(workspace, scope):
+def changed_scopes(workspace, scope, inventory):
     paths = git_paths(workspace, "diff", "--cached", "--no-renames", "--name-only", "-z")
+    inventory_path = Path(os.path.normpath(inventory)) if inventory else None
     changed = []
     for path in paths:
-        if path == Path("ci/ansible-content.lock") or (path.parts and path.parts[0] == "ci"):
+        if path == inventory_path or (path.parts and path.parts[0] == "ci"):
             return None
         if path.as_posix().endswith(CONFIG_NAMES + IGNORE_NAMES) or path.name == "ansible.cfg":
             return None
-        if path.is_relative_to(scope) and (path.suffix in YAML_SUFFIXES or any(part in {"roles", "templates", "files"} for part in path.parts)):
-            if not any(part.startswith(".") for part in path.parts):
-                changed.append(path.relative_to(scope))
+        if not path.is_relative_to(scope) or any(part.startswith(".") for part in path.parts):
+            continue
+        relative = path.relative_to(scope)
+        if set(relative.parts[:-1]) & DEPENDENCY_DIRS:
+            return None
+        if path.suffix in YAML_SUFFIXES:
+            changed.append(relative)
     return changed
 
 
-def select_targets(scope, staged_changes):
-    targets = lint_targets(scope)
+def select_targets(scope, staged_changes, workspace, relative_scope):
+    targets, incomplete = lint_targets(scope)
     if staged_changes is None:
-        return targets
-    if all(scope / path in targets and (scope / path).is_file() for path in staged_changes):
-        return [target for target in targets if target.relative_to(scope) in staged_changes]
-    # A dependency, deletion or role change can affect more than one play.
-    return targets
+        return targets, incomplete
+    selected = []
+    for relative in staged_changes:
+        path = scope / relative
+        if path in targets:
+            selected.append(path)
+            continue
+        if path.is_file():
+            text = path.read_text()
+        else:
+            before = subprocess.run(
+                ["git", "-C", str(workspace), "show", f"HEAD:{relative_scope / relative}"],
+                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, check=False,
+            )
+            text = before.stdout.decode() if before.returncode == 0 else ""
+        if yaml_keys(text):
+            # A task list, include or removed play can affect more than one target.
+            return targets, incomplete
+    return selected, incomplete
 
 
 def lint_config(tree, scope, scratch):
@@ -175,15 +209,25 @@ def locked_archive(tree, dependency):
         if hashlib.file_digest(stream, "sha256").hexdigest() != dependency["sha256"]:
             raise ValueError(f"Content archive checksum mismatch: {archive.relative_to(tree)}")
     with tarfile.open(archive) as bundle:
+        roots = set()
         for member in bundle.getmembers():
             path = PurePosixPath(member.name)
             if path.is_absolute() or ".." in path.parts or not (member.isfile() or member.isdir()):
                 raise ValueError(f"Unsafe path in content archive: {archive.relative_to(tree)}")
+            if path.parts:
+                roots.add(path.parts[0])
         if dependency["kind"] == "collection":
             manifest = bundle.extractfile("MANIFEST.json")
-            if manifest is None or json.load(manifest)["collection_info"]["version"] != dependency["version"]:
+            metadata = json.load(manifest)["collection_info"] if manifest else {}
+            if metadata.get("version") != dependency["version"]:
                 raise ValueError(f"Collection manifest version mismatch: {archive.relative_to(tree)}")
-    return archive
+            return archive, f"{metadata['namespace']}.{metadata['name']}"
+        if len(roots) != 1:
+            raise ValueError("A role archive must contain one named top-level role directory.")
+        name = roots.pop()
+        if not re.fullmatch(r"[A-Za-z0-9_][A-Za-z0-9_.-]*", name):
+            raise ValueError(f"Invalid role archive name: {name}")
+    return archive, name
 
 
 def install_content(tree, scratch, env):
@@ -193,14 +237,26 @@ def install_content(tree, scratch, env):
     manifest = yaml.safe_load(lock.read_text())
     if not isinstance(manifest, dict) or set(manifest) != {"dependencies"} or not isinstance(manifest["dependencies"], list):
         raise ValueError("The Ansible content lock needs a dependencies list.")
+    installed = set()
     for dependency in manifest["dependencies"]:
-        archive = locked_archive(tree, dependency)
+        archive, name = locked_archive(tree, dependency)
         kind = dependency["kind"]
+        key = (kind, name)
+        if key in installed:
+            raise ValueError(f"Duplicate locked {kind}: {name}")
         destination = scratch / ("collections" if kind == "collection" else "roles")
+        arguments = [str(archive)]
+        if kind == "role":
+            requirements = scratch / "role-requirements.yml"
+            requirements.write_text(yaml.safe_dump({
+                "roles": [{"name": name, "src": str(archive), "version": dependency["version"]}],
+            }))
+            arguments = ["-r", str(requirements)]
         subprocess.run(
-            [str(TOOL_BIN / "ansible-galaxy"), kind, "install", "--no-deps", "-p", str(destination), str(archive)],
+            [str(TOOL_BIN / "ansible-galaxy"), kind, "install", "--no-deps", "-p", str(destination), *arguments],
             cwd=scratch, env=env, check=True,
         )
+        installed.add(key)
 
 
 def main():
@@ -214,7 +270,8 @@ def main():
     profile = os.environ.get("ANSIBLE_CI_PROFILE") or "production"
     if profile not in PROFILES:
         raise ValueError(f"Unknown Ansible lint profile: {profile}")
-    changes = changed_scopes(workspace, scope) if args.staged else None
+    inventory_input = os.environ.get("ANSIBLE_CI_FIXTURE_INVENTORY")
+    changes = changed_scopes(workspace, scope, inventory_input) if args.staged else None
     if changes == []:
         return 0
     with tempfile.TemporaryDirectory() as temporary:
@@ -223,15 +280,24 @@ def main():
         tree.mkdir()
         snapshot(workspace, tree, args.staged)
         root = tree / scope
-        targets = select_targets(root, changes)
+        targets, incomplete = select_targets(root, changes, workspace, scope)
         if not targets:
             if args.staged:
                 return 0
             raise ValueError("No Ansible content in working-directory.")
         config = lint_config(tree, root, scratch)
-        inventory = fixture_inventory(tree, os.environ.get("ANSIBLE_CI_FIXTURE_INVENTORY"), scratch)
+        inventory = fixture_inventory(tree, inventory_input, scratch)
         env = isolated_environment(scratch, inventory, root)
         install_content(tree, scratch, env)
+        # Native lint can classify an incomplete play as generic YAML.
+        for target in targets:
+            if target in incomplete:
+                result = subprocess.run(
+                    [str(TOOL_BIN / "ansible-playbook"), "--syntax-check", str(target)],
+                    cwd=root, env=env, check=False,
+                )
+                if result.returncode:
+                    raise ValueError(f"syntax-check failed: {target.relative_to(root)}")
         return subprocess.run(
             [str(TOOL_BIN / "ansible-lint"), "--offline", "--strict", "--profile", profile,
              "--project-dir", str(root), "-c", str(config), *map(str, targets)],
