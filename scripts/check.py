@@ -158,7 +158,12 @@ def referenced_paths(tree, targets):
         if source in visited:
             continue
         visited.add(source)
-        for reference in literal_references(source.read_text()):
+        try:
+            includes = list(literal_references(source.read_text()))
+        except (UnicodeError, yaml.YAMLError):
+            # A selected role is still linted strictly when any of its inputs change.
+            continue
+        for reference in includes:
             path = (source.parent / reference).resolve()
             if not path.is_relative_to(tree):
                 continue

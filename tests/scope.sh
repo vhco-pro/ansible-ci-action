@@ -2,7 +2,7 @@
 set -euo pipefail
 repo=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 if [[ $# -eq 0 ]]; then
-  for fixture in malformed metadata metadata-list yaml-stream inventory role staged-archive nested-ignore imported-task handler-only alternate-task unrelated-invalid-yaml referenced-vars; do
+  for fixture in malformed metadata metadata-list yaml-stream inventory role staged-archive nested-ignore imported-task handler-only alternate-task unrelated-invalid-yaml unrelated-role-draft referenced-vars; do
     "$0" "$fixture"
   done
   exit 0
@@ -134,6 +134,26 @@ YAML
     printf '%s\n' '  tasks: [' >> play.yml
     git add -- play.yml
     refuse 'expected the node content' "$hook"
+    ;;
+  unrelated-role-draft)
+    mkdir -p roles/fixture_role/tasks
+    task=roles/fixture_role/tasks/main.yml
+    cat >"$task" <<'YAML'
+---
+- name: Report fixture
+  ansible.builtin.debug:
+    msg: synthetic
+YAML
+    printf '%s\n' 'unfinished: [' > roles/fixture_role/tasks/draft.yml
+    commit_fixture play.yml roles
+    printf '# Unrelated edit\n' > README.md
+    git add -- README.md
+    index=$(git write-tree)
+    "$hook"
+    test "$index" = "$(git write-tree)"
+    printf '\n# Check changed role\n' >> "$task"
+    git add -- "$task"
+    refuse 'load-failure[yaml]' "$hook"
     ;;
   referenced-vars)
     sed -i '/  tasks:/i\  vars_files: [variables.json]' play.yml

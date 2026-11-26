@@ -93,6 +93,9 @@ Deliver one composite, its direct check script, native Git hook example, public 
 - [x] T10 `scripts/check.py` and the scope fixtures cover role directories with alternate task files and skip parsing unrelated staged content as Ansible (AC-01, AC-03).
       Evidence: The alternate task entry and unrelated invalid YAML fixtures failed before the change. The same fixtures and the full native check, scope, and hook suites passed after the change. A malformed staged playbook still failed.
 
+- [x] T11 `scripts/check.py` and the staged scope fixture tolerate an unfinished role file during reference discovery for unrelated stages (AC-03).
+      Evidence: The README-only fixture failed before the change. It passed afterward and the same fixture still rejected the unfinished role when a file in that role was staged. The full native check, hook and scope suites passed.
+
 ## Open Questions
 
 None.
