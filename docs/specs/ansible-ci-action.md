@@ -117,6 +117,7 @@ None.
 | 2026-11-26 | R-10 | implementation | `8a60b5e3f9448b34dddac071bf2e7ff4b5c2b0dd` | unknown | procedural | Hosted fixtures passed. Alternate role entries and unrelated staged edits need fixes. |
 | 2026-11-26 | R-11 | implementation | `a7e80a8073b3692fe2ff09ff86814d268dd8d4d8` | unknown | procedural | Three criteria met. An unfinished role file still blocks an unrelated staged edit. |
 | 2026-11-26 | R-12 | implementation | `cdafd6932e926c606ef829dc7888b10a4d472487` | unknown | procedural | All four criteria met. Python archive updates still require manual review. |
+| 2026-11-26 | R-13 | implementation | `4d5b84fd2ced82e9870591cb93fbed2e75bef23c` | unknown | procedural | All four criteria met. Public security onboarding findings are recorded below. |
 
 ### R-1
 
@@ -453,6 +454,59 @@ SEVERITY: should-fix
 WHERE: README.md:63-68, scripts/.tool-versions, scripts/python-archive.tsv, scripts/setup.sh:37-57, scripts/requirements.txt:1-2, renovate.json, Design tool pins, conventions/delivery.md#pinning-and-updates
 EVIDENCE: The README documents the manual update of the upstream standalone build and independently pinned archive digest. Renovate can discover the Python version in .tool-versions. The configured managers do not discover the coupled archive build and SHA-256, so a Python version-only proposal remains incomplete and same-version archive rebuilds still need manual discovery. https://docs.renovatebot.com/modules/manager/asdf/
 PROPOSAL: Make the archive dependency discoverable to the updater and coordinate the version, build, verified digest and generated dependency lock in one reviewed change.
+
+### R-13
+
+CRITERION: AC-01 Clean Ansible content passes the production profile and syntax checks. Production-rule violations, syntax failures, suppressed checks on selected content and empty scopes fail.
+VERDICT: met
+EVIDENCE: Local tests/check.sh and tests/scope.sh exited 0 on the export of 4d5b84fd2ced82e9870591cb93fbed2e75bef23c. They exercised clean playbooks, handler-only and alternate-entry roles, and refusal for production-rule violations, strict warnings, invalid syntax, suppression and empty scopes. The same tests passed on the hosted runner.
+
+CRITERION: AC-02 The action uses its exact dependency pins, reports installed versions and rejects an invalid profile, an escaping path, dynamic inventory or failed setup. Syntax checking uses isolated synthetic inventory without ambient configuration or credentials.
+VERDICT: met
+EVIDENCE: In exact Test run 45871394397, the fixture logs show the intended composite failure and match all three direct-check outputs: Python 3.14.10, ansible-core 2.22.0 and ansible-lint 26.11.1. The hosted setup test completed a fresh installation and confirmed refusal for the wrong archive checksum and corrupt package hashes. Local tests/check.sh and tests/scope.sh passed invalid-input, locked archive and controlled-environment assertions.
+
+CRITERION: AC-03 The direct command and native hook share validation behavior. Hook checks skip unrelated staged files, select affected Ansible content and use the index snapshot. The source and index stay intact.
+VERDICT: met
+EVIDENCE: Local tests/hook.sh and tests/scope.sh passed on the exact export. The tests confirmed partial staging, skipping unrelated changes in the presence of malformed drafts, following staged JSON variables and imported tasks, retaining strict validation when a role is affected, and preserving source and index.
+
+CRITERION: AC-04 The repository contains synthetic read-only public fixtures, lintable workflows and shared GitVersion release wiring that requires passing fixture tests before tagging.
+VERDICT: met
+EVIDENCE: In exact Test run 45871394397, the read-only fixture and workflow jobs passed, including pinned actionlint, pinned ShellCheck and the synthetic release gate. Local actionlint 1.7.12 and tests/release.sh also passed. The caller requires the read-only fixtures before the ref gate and pins the shared GitVersion release workflow and exact-tag recovery action. The release guard was tested with synthetic refs without publication.
+
+FINDING: F-01
+KIND: factual
+SEVERITY: should-fix
+WHERE: .github/workflows/codeql.yml:19-35, pinned vhco-pro/.github reusable-codeql-actions.yml and reusable-codeql-js.yml, conventions/github-actions.md#security
+EVIDENCE: Both pinned reusable CodeQL jobs leave the default checkout credential persistence enabled. Neither scan job pushes. The pinned standard requires persist-credentials false for these checkouts. https://github.com/actions/checkout/blob/3d3c42e5aac5ba805825da76410c181273ba90b1/action.yml
+PROPOSAL: Disable persistence in both shared CodeQL checkout steps and adopt the corrected shared workflow pin.
+
+FINDING: F-02
+KIND: factual
+SEVERITY: should-fix
+WHERE: .github/workflows/codeql.yml and scorecard.yml, pinned vhco-pro/.github reusable-codeql-actions.yml, reusable-codeql-js.yml and reusable-scorecard.yml, conventions/github-actions.md#execution and #security
+EVIDENCE: All three called workflows omit workflow-level permissions: {}. The Python wrapper and Scorecard jobs omit a job timeout. Both CodeQL workflows omit defaults.run.shell. The caller's workflow settings do not define those values inside the reusable workflows.
+PROPOSAL: Apply the shared workflow permission and timeout defaults and add the standard shell defaults to both CodeQL workflows. Keep the Scorecard publishing workflow's default-shell exception because its provider checks for workflow-level defaults.
+
+FINDING: F-03
+KIND: factual
+SEVERITY: should-fix
+WHERE: .github/workflows/scorecard.yml:2-26, README.md Security checks
+EVIDENCE: The Scorecard job checks public visibility only. Its workflow_dispatch trigger can select another branch, and OpenSSF's results verifier requires the tested ref to be the analyzed repository's default branch. The production source supports validation through the pinned reusable workflow. No Scorecard execution was observed for this feature commit. https://github.com/ossf/scorecard-infra/blob/4612b925b7c44e3762267c3bc5b1a8ebaba16740/api/app/server/post_results.go
+PROPOSAL: Gate Scorecard publication on the public default branch for every trigger. Verify the first eligible hosted run and published analysis on that branch when authorized.
+
+FINDING: F-04
+KIND: factual
+SEVERITY: nit
+WHERE: .github/workflows/codeql.yml:25-35, pinned vhco-pro/.github reusable-codeql-js.yml
+EVIDENCE: Exact CodeQL run 45871394766 scanned 2 of 2 Python files and 5 of 5 Actions files. The Python scan job displays JS/TS in its name, and GitHub recorded its result under /language:js-ts. The current Actions result uses its own distinct category.
+PROPOSAL: Use the selected language in the job display name and CodeQL result category while preserving the JavaScript and TypeScript default for existing callers.
+
+FINDING: F-05
+KIND: factual
+SEVERITY: should-fix
+WHERE: README.md:63-68, scripts/.tool-versions, scripts/python-archive.tsv, scripts/setup.sh:37-57, scripts/requirements.txt:1-2, renovate.json, Design tool pins, conventions/delivery.md#pinning-and-updates
+EVIDENCE: Renovate can discover the Python version in .tool-versions. The configured managers do not discover the coupled archive build and SHA-256. The README documents the deliberate manual update, including the linked Python version and generated wheel lock. https://docs.renovatebot.com/modules/manager/asdf/
+PROPOSAL: Make the archive dependency discoverable to the updater and coordinate its version, build, verified digest and generated dependency lock in one reviewed change.
 
 ## Sources
 
