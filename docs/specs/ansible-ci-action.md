@@ -81,6 +81,8 @@ Deliver one composite, its direct check script, native Git hook example, public 
 
       Evidence: The unrelated YAML list and stream, staged archive outside ci/, and nested ignore-file fixtures failed before the change and passed after it. Native, hook, release and actionlint suites passed.
 
+- [ ] T8 `scripts/check.py` and `tests/scope.sh` select staged files referenced by literal imports. Verify the imported task refusal and the unrelated YAML allowance (AC-03).
+
 ## Open Questions
 
 None.
