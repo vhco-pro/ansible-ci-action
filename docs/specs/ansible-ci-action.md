@@ -60,7 +60,8 @@ Deliver one composite, its direct check script, native Git hook example, public 
 
 ## Tasks
 
-- [ ] T1 `tests/setup.sh`, `tests/check.sh`, `tests/hook.sh`, and `tests/release.sh` specify clean and refusal cases. See each fail because its entry point is absent (AC-01, AC-02, AC-03, AC-04).
+- [x] T1 `tests/setup.sh`, `tests/check.sh`, `tests/hook.sh`, and `tests/release.sh` specify clean and refusal cases. See each fail because its entry point is absent (AC-01, AC-02, AC-03, AC-04).
+      Evidence: Each test failed at its absent setup, check, hook, or release entry point.
 - [ ] T2 `scripts/setup.sh` and tool pins install the verified Python and lint packages. Run `tests/setup.sh` (AC-02).
 - [ ] T3 `scripts/check.sh` validates lint scope, fixture inventory and content locks. Run `tests/check.sh` (AC-01, AC-02).
 - [ ] T4 `examples/native-hook/` invokes the check on staged affected content. Run `tests/hook.sh` (AC-03).
