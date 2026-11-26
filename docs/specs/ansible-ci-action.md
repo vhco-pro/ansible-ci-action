@@ -44,11 +44,11 @@ Deliver one composite, its direct check script, native Git hook example, public 
 
 ## Acceptance Criteria
 
-- [x] AC-01: Clean Ansible content passes the production profile and syntax checks. Production-rule violations, syntax failures, suppressed checks on selected content and empty scopes fail.
-      Evidence: tests/check.sh and tests/scope.sh malformed refused the expected diagnostics with a valid sibling present.
+- [ ] AC-01: Clean Ansible content passes the production profile and syntax checks. Production-rule violations, syntax failures, suppressed checks on selected content and empty scopes fail.
+      Evidence: R-6 found that unrelated valid multi-document YAML prevented checking.
 - [ ] AC-02: The action uses its exact dependency pins, reports installed versions and rejects an invalid profile, an escaping path, dynamic inventory or failed setup. Syntax checking uses isolated synthetic inventory without ambient configuration or credentials.
-- [x] AC-03: The direct command and native hook share validation behavior. Hook checks skip unrelated staged files, select affected Ansible content and use the index snapshot. The source and index stay intact.
-      Evidence: tests/hook.sh and the scope regressions verified staged inventory, unrelated YAML and unchanged index or source.
+- [ ] AC-03: The direct command and native hook share validation behavior. Hook checks skip unrelated staged files, select affected Ansible content and use the index snapshot. The source and index stay intact.
+      Evidence: R-6 found that staged locked archives outside ci/ were missed and unrelated YAML lists triggered lint.
 - [ ] AC-04: The repository contains synthetic read-only public fixtures, lintable workflows and shared GitVersion release wiring that requires passing fixture tests before tagging.
 
 ## Test Plan
@@ -91,6 +91,7 @@ None.
 | 2026-11-26 | R-4 | spec | `6199a51ae0db55326f5e33bc320ce1d1e0938847` | unknown | procedural | No findings. |
 | 2026-11-26 | R-4 | spec | `6199a51ae0db55326f5e33bc320ce1d1e0938847` | n/a | n/a | accepted by owner |
 | 2026-11-26 | R-5 | implementation | `0c8d87655b95c801ded036e6f717244d55ddf926` | unknown | procedural | Playbook selection, staged scope and local role archives need fixes. |
+| 2026-11-26 | R-6 | implementation | `332d1b9c00959571a22062490717d0a792c8c8bd` | unknown | procedural | Unrelated YAML and staged locked archives need fixes. |
 
 ### R-1
 
@@ -203,6 +204,38 @@ SEVERITY: should-fix
 WHERE: AC-03, examples/native-hook/.githooks/pre-commit, scripts/check.py changed_scopes and select_targets
 EVIDENCE: Staging only `metadata.yml` with one unrelated description mapping invoked the actual checker. The hook exited 2 on `fqcn[action-core]` in an unchanged playbook. The shell passes any YAML path and the Python selector falls back to all Ansible targets for a YAML path that is not itself a target.
 PROPOSAL: Distinguish Ansible dependencies and candidate lint targets from unrelated YAML before invoking a full-scope check. Add an unrelated YAML fixture with an unchanged failing playbook.
+
+### R-6
+
+CRITERION: AC-01 Clean Ansible content passes the production profile and syntax checks. Production-rule violations, syntax failures, suppressed checks on selected content and empty scopes fail.
+VERDICT: not met
+EVIDENCE: At 332d1b9c00959571a22062490717d0a792c8c8bd, `tests/check.sh` and `tests/scope.sh malformed` passed. A separate synthetic checkout with a clean playbook and a valid, unrelated multi-document YAML file exited 1 before lint with `expected a single document in the stream`.
+
+CRITERION: AC-02 The action uses its exact dependency pins, reports installed versions and rejects an invalid profile, an escaping path, dynamic inventory or failed setup. Syntax checking uses isolated synthetic inventory without ambient configuration or credentials.
+VERDICT: not verified
+EVIDENCE: At 332d1b9c00959571a22062490717d0a792c8c8bd, `tests/check.sh` passed the locked collection, invalid input and environment checks. `tests/scope.sh role` installed and resolved the locked role. `scripts/setup.sh versions` reported Python 3.14.10, ansible-core 2.22.0 and ansible-lint 26.11.1. The installer, pins and setup test are unchanged from the prior successful installation and checksum replay. Hosted composite outputs were not observed.
+
+CRITERION: AC-03 The direct command and native hook share validation behavior. Hook checks skip unrelated staged files, select affected Ansible content and use the index snapshot. The source and index stay intact.
+VERDICT: not met
+EVIDENCE: At 332d1b9c00959571a22062490717d0a792c8c8bd, `tests/hook.sh` and the inventory and metadata scope cases passed. A locked role archive under `vendor/` passed baseline. Staging only corrupt bytes in that archive yielded hook and staged checker exit 0 while the direct checker exited 1 for the checksum mismatch. In a separate checkout, staging only `docs/catalog.yml` containing an unrelated YAML list caused the hook to exit 2 on a lint failure in an unchanged playbook.
+
+CRITERION: AC-04 The repository contains synthetic read-only public fixtures, lintable workflows and shared GitVersion release wiring that requires passing fixture tests before tagging.
+VERDICT: not verified
+EVIDENCE: At 332d1b9c00959571a22062490717d0a792c8c8bd, actionlint 1.7.12 and `tests/release.sh` passed. Workflow inspection confirmed read-only fixture jobs with checkout credentials disabled and a fixture gate before both publication paths. Hosted composite execution remains pending authorization.
+
+FINDING: F-01
+KIND: factual
+SEVERITY: should-fix
+WHERE: AC-03, scripts/check.py changed_scopes, examples/native-hook/.githooks/pre-commit
+EVIDENCE: The content lock supports checkout-relative archive paths and the direct action successfully installed a role locked at `vendor/fixture_role-1.0.0.tar.gz`. After staging only corrupt bytes at that path, the hook and staged checker exited 0 and the direct checker exited 1 with `Content archive checksum mismatch: vendor/fixture_role-1.0.0.tar.gz`. The staged selectors do not use the lock's archive paths.
+PROPOSAL: Use declared archive paths from the staged lock when determining affected scopes. Add a regression for an archive outside `ci/` and require the hook to refuse the changed checksum.
+
+FINDING: F-02
+KIND: factual
+SEVERITY: should-fix
+WHERE: AC-01 and AC-03, scripts/check.py yaml_keys, lint_targets and select_targets
+EVIDENCE: `yaml_keys` applies `yaml.compose` to all visible YAML candidates, so a valid unrelated YAML stream with two documents blocks a clean playbook. For staged changes, any nonempty sequence of mappings triggers the full-scope fallback. Staging only `docs/catalog.yml` containing `- ticket: "DOC-123"` and a summary caused exit 2 on `fqcn[action-core]` in an unchanged playbook.
+PROPOSAL: Handle valid multi-document YAML during discovery and distinguish unrelated YAML sequences from Ansible targets and dependencies. Preserve failure behavior for malformed plays and add both unrelated YAML forms to the scope tests.
 
 ## Sources
 
