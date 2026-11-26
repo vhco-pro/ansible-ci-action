@@ -56,5 +56,5 @@ jobs:
         run: |
           tests/check.sh
           tests/hook.sh
-          for fixture in malformed metadata inventory role; do tests/scope.sh "$fixture"; done
+          tests/scope.sh
       - run: tests/setup.sh

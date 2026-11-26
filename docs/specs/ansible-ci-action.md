@@ -44,11 +44,11 @@ Deliver one composite, its direct check script, native Git hook example, public 
 
 ## Acceptance Criteria
 
-- [ ] AC-01: Clean Ansible content passes the production profile and syntax checks. Production-rule violations, syntax failures, suppressed checks on selected content and empty scopes fail.
-      Evidence: R-6 found that unrelated valid multi-document YAML prevented checking.
+- [x] AC-01: Clean Ansible content passes the production profile and syntax checks. Production-rule violations, syntax failures, suppressed checks on selected content and empty scopes fail.
+      Evidence: tests/check.sh and tests/scope.sh refused malformed or suppressed plays and accepted a clean play beside unrelated multi-document YAML.
 - [ ] AC-02: The action uses its exact dependency pins, reports installed versions and rejects an invalid profile, an escaping path, dynamic inventory or failed setup. Syntax checking uses isolated synthetic inventory without ambient configuration or credentials.
-- [ ] AC-03: The direct command and native hook share validation behavior. Hook checks skip unrelated staged files, select affected Ansible content and use the index snapshot. The source and index stay intact.
-      Evidence: R-6 found that staged locked archives outside ci/ were missed and unrelated YAML lists triggered lint.
+- [x] AC-03: The direct command and native hook share validation behavior. Hook checks skip unrelated staged files, select affected Ansible content and use the index snapshot. The source and index stay intact.
+      Evidence: tests/hook.sh and tests/scope.sh kept the index and worktree intact, ignored unrelated YAML, and refused a staged invalid inventory, archive or nested ignore file.
 - [ ] AC-04: The repository contains synthetic read-only public fixtures, lintable workflows and shared GitVersion release wiring that requires passing fixture tests before tagging.
 
 ## Test Plan
@@ -77,7 +77,9 @@ Deliver one composite, its direct check script, native Git hook example, public 
 
       Evidence: The four scope fixtures failed before the fixes. All four passed after the fixes, along with the native check, staged hook, release guard and actionlint.
 
-- [ ] T7 `scripts/check.py`, the native hook and scope fixtures use staged lock paths and distinguish unrelated YAML documents. Run native scope, hook and check suites (AC-01, AC-03).
+- [x] T7 `scripts/check.py`, the native hook and scope fixtures use staged lock paths and distinguish unrelated YAML documents. Run native scope, hook and check suites (AC-01, AC-03).
+
+      Evidence: The unrelated YAML list and stream, staged archive outside ci/, and nested ignore-file fixtures failed before the change and passed after it. Native, hook, release and actionlint suites passed.
 
 ## Open Questions
 

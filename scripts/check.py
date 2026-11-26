@@ -18,6 +18,11 @@ CONFIG_NAMES = (".ansible-lint", ".ansible-lint.yml", ".ansible-lint.yaml", ".co
 IGNORE_NAMES = (".ansible-lint-ignore", ".config/ansible-lint-ignore.txt")
 SAFE_CONFIG = {"profile", "verbosity", "var_naming_pattern", "loop_var_prefix", "enable_list", "only_builtins_allow_collections"}
 YAML_SUFFIXES = {".yml", ".yaml"}
+CONTENT_LOCK = Path("ci/ansible-content.lock")
+TASK_KEYS = {
+    "action", "local_action", "block", "rescue", "always", "register", "notify",
+    "include_tasks", "import_tasks", "include_role", "import_role", "include_vars",
+}
 PLAY_HEADERS = {"hosts", "import_playbook"}
 PLAY_BODY = {"tasks", "pre_tasks", "post_tasks", "handlers", "roles", "gather_facts"}
 DEPENDENCY_DIRS = {"roles", "tasks", "handlers", "defaults", "vars", "templates", "files", "meta", "group_vars", "host_vars"}
@@ -58,14 +63,18 @@ def snapshot(workspace, tree, staged):
             raise ValueError(f"Tracked symlink escapes the checkout: {path.relative_to(tree)}")
 
 
-def yaml_keys(text):
-    node = yaml.compose(text)
-    if not isinstance(node, yaml.SequenceNode):
-        return set()
-    return {
-        key.value for entry in node.value if isinstance(entry, yaml.MappingNode)
+def yaml_shape(text):
+    documents = list(yaml.compose_all(text))
+    keys = {
+        key.value for document in documents if isinstance(document, yaml.SequenceNode)
+        for entry in document.value if isinstance(entry, yaml.MappingNode)
         for key, _ in entry.value if isinstance(key, yaml.ScalarNode)
     }
+    return keys, len(documents) > 1
+
+
+def looks_like_tasks(keys):
+    return bool(keys & (PLAY_HEADERS | PLAY_BODY | TASK_KEYS)) or any(key.count(".") >= 2 for key in keys)
 
 
 def lint_targets(scope):
@@ -80,10 +89,10 @@ def lint_targets(scope):
         if path.stem == "main" and path.parent.name == "tasks":
             roles.add(path.parent.parent)
             continue
-        keys = yaml_keys(path.read_text())
+        keys, multi_document = yaml_shape(path.read_text())
         if keys & (PLAY_HEADERS | PLAY_BODY):
             playbooks.append(path)
-            if not keys & PLAY_HEADERS:
+            if multi_document or not keys & PLAY_HEADERS:
                 incomplete.add(path)
     targets = sorted(roles) + [playbook for playbook in playbooks if not any(playbook.is_relative_to(role) for role in roles)]
     return targets, incomplete
@@ -92,9 +101,13 @@ def lint_targets(scope):
 def changed_scopes(workspace, scope, inventory):
     paths = git_paths(workspace, "diff", "--cached", "--no-renames", "--name-only", "-z")
     inventory_path = Path(os.path.normpath(inventory)) if inventory else None
+    dependency_paths = set()
+    if CONTENT_LOCK in git_paths(workspace, "ls-files", "-z", "--", str(CONTENT_LOCK)):
+        dependencies = content_dependencies(git(workspace, "show", f":{CONTENT_LOCK}"))
+        dependency_paths = {Path(os.path.normpath(item["archive"])) for item in dependencies}
     changed = []
     for path in paths:
-        if path == inventory_path or (path.parts and path.parts[0] == "ci"):
+        if path == inventory_path or path == CONTENT_LOCK or path in dependency_paths:
             return None
         if path.as_posix().endswith(CONFIG_NAMES + IGNORE_NAMES) or path.name == "ansible.cfg":
             return None
@@ -126,7 +139,8 @@ def select_targets(scope, staged_changes, workspace, relative_scope):
                 stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, check=False,
             )
             text = before.stdout.decode() if before.returncode == 0 else ""
-        if yaml_keys(text):
+        keys, _ = yaml_shape(text)
+        if looks_like_tasks(keys):
             # A task list, include or removed play can affect more than one target.
             return targets, incomplete
     return selected, incomplete
@@ -200,10 +214,8 @@ def isolated_environment(scratch, inventory, scope):
 
 
 def locked_archive(tree, dependency):
-    if not isinstance(dependency, dict) or set(dependency) != {"kind", "archive", "version", "sha256"}:
-        raise ValueError("Each content lock entry needs kind, archive, version and sha256.")
-    if dependency["kind"] not in {"role", "collection"} or not isinstance(dependency["version"], str) or not dependency["version"]:
-        raise ValueError("Content requires a role or collection kind and an exact version.")
+    if dependency["kind"] not in {"role", "collection"}:
+        raise ValueError("Content requires a role or collection kind.")
     archive = contained_path(tree, dependency["archive"], "Content archive")
     with archive.open("rb") as stream:
         if hashlib.file_digest(stream, "sha256").hexdigest() != dependency["sha256"]:
@@ -230,15 +242,24 @@ def locked_archive(tree, dependency):
     return archive, name
 
 
-def install_content(tree, scratch, env):
-    lock = tree / "ci/ansible-content.lock"
-    if not lock.is_file():
-        return
-    manifest = yaml.safe_load(lock.read_text())
+def content_dependencies(contents):
+    manifest = yaml.safe_load(contents)
     if not isinstance(manifest, dict) or set(manifest) != {"dependencies"} or not isinstance(manifest["dependencies"], list):
         raise ValueError("The Ansible content lock needs a dependencies list.")
-    installed = set()
     for dependency in manifest["dependencies"]:
+        if not isinstance(dependency, dict) or set(dependency) != {"kind", "archive", "version", "sha256"}:
+            raise ValueError("Each content lock entry needs kind, archive, version and sha256.")
+        if not all(isinstance(value, str) and value for value in dependency.values()):
+            raise ValueError("Content lock entries require nonempty strings.")
+    return manifest["dependencies"]
+
+
+def install_content(tree, scratch, env):
+    lock = tree / CONTENT_LOCK
+    if not lock.is_file():
+        return
+    installed = set()
+    for dependency in content_dependencies(lock.read_bytes()):
         archive, name = locked_archive(tree, dependency)
         kind = dependency["kind"]
         key = (kind, name)
