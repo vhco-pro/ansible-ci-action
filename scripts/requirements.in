@@ -1,2 +1,4 @@
+--only-binary :all:
+
 ansible-lint==26.11.1
 ansible-core==2.22.0
