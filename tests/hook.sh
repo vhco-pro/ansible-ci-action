@@ -7,6 +7,7 @@ cd "$scratch"
 git init -q
 hook="$repo/examples/native-hook/.githooks/pre-commit"
 test -x "$hook" || { printf 'Hook entry point absent: %s\n' "$hook" >&2; exit 1; }
+export ANSIBLE_CI_WORKSPACE="$scratch"
 export ANSIBLE_CI_CHECK="$repo/scripts/check.sh"
 printf '# Unrelated Markdown\n' > README.md
 git add -- README.md
