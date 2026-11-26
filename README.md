@@ -66,3 +66,8 @@ With the pinned environment, run `tests/setup.sh`, `tests/check.sh`,
 updating controller dependencies. For a Python version update, verify the
 upstream build and archive digest, update `scripts/python-archive.tsv` alongside
 `scripts/.tool-versions`, and regenerate the lock for the new Python version.
+
+## Security checks
+
+CodeQL scans the GitHub Actions files and Python source. ShellCheck checks the Bash scripts
+and the native Git hook. OpenSSF Scorecard runs on the public default branch.

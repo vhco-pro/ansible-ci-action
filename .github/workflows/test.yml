@@ -22,6 +22,22 @@ jobs:
         with:
           persist-credentials: false
       - uses: docker://rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667
+      - name: Check shell scripts
+        uses: docker://koalaman/shellcheck:v0.11.0@sha256:61862eba1fcf09a484ebcc6feea46f1782532571a34ed51fedf90dd25f925a8d
+        with:
+          args: >-
+            --severity=warning
+            scripts/check.sh
+            scripts/release-mode.sh
+            scripts/setup-action.sh
+            scripts/setup.sh
+            tests/check.sh
+            tests/compare-action.sh
+            tests/hook.sh
+            tests/release.sh
+            tests/scope.sh
+            tests/setup.sh
+            examples/native-hook/.githooks/pre-commit
       - run: tests/release.sh
 
   fixtures:
