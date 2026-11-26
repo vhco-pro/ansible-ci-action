@@ -1,7 +1,7 @@
 ---
 status: draft
 status_description: "Owner-approved design captured for independent specification review."
-issue: null
+issue: https://github.com/vhco-pro/ansible-ci-action/issues/1
 goal: "Consumers can run the same production-profile Ansible checks locally and in GitHub Actions."
 covers:
   - action.yml
@@ -72,6 +72,7 @@ None.
 | 2026-11-26 | R-1 | spec | `d5bd9419c917b29030e37cf74d42c7a5b7a9abcd` | unknown | procedural | Inventory isolation and selected lint scope need explicit tests. |
 | 2026-11-26 | R-2 | spec | `f6b110f692c5d18ceb9078232707429e9a2d37c5` | unknown | procedural | Production-profile warnings must fail. |
 | 2026-11-26 | R-3 | spec | `d6d0e63d36caf35ca942b8f3f52b7e35e4d86481` | unknown | procedural | The warning fixture must match the action's lint scope. |
+| 2026-11-26 | R-4 | spec | `6199a51ae0db55326f5e33bc320ce1d1e0938847` | unknown | procedural | No findings. |
 
 ### R-1
 
@@ -134,6 +135,10 @@ SEVERITY: blocking
 WHERE: Design explicit lint scope, AC-01, Test Plan AC-01
 EVIDENCE: The revision addressing R-2 F-01 adds a nested Python collection plugin as proof of strict mode. The design resolves playbooks and roles as explicit lint targets. Ansible-lint's `fqcn[deep]` rule checks a lintable whose kind is `plugin`. A correct implementation that passes only the specified playbooks and roles to the linter can miss that fixture. https://github.com/ansible/ansible-lint/blob/main/src/ansiblelint/rules/fqcn.py
 PROPOSAL: Use a `jinja[spacing]` warning in an otherwise clean playbook, within the existing lint scope. Prove it exits zero with native non-strict lint and fails with the expected diagnostic through the wrapper.
+
+### R-4
+
+NO FINDINGS
 
 ## Sources
 
