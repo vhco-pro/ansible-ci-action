@@ -73,6 +73,8 @@ Deliver one composite, its direct check script, native Git hook example, public 
 - [x] T5 `action.yml`, `.github/workflows/`, and `README.md` wire the fixture and release jobs. Run `tests/release.sh` and `actionlint`. Observe the composite on a public runner when authorized (AC-02, AC-04).
       Evidence: actionlint, the release ref gate fixtures and direct pass and warning-only refusal cases passed locally with actual version outputs. Hosted composite execution remains pending.
 
+- [ ] T6 `scripts/check.py`, the native hook and scope fixtures check malformed plays, locked roles and relevant staged dependencies. Run `tests/scope.sh` and the native check and hook suites (AC-01, AC-02, AC-03).
+
 ## Open Questions
 
 None.
