@@ -77,6 +77,8 @@ Deliver one composite, its direct check script, native Git hook example, public 
 
       Evidence: The four scope fixtures failed before the fixes. All four passed after the fixes, along with the native check, staged hook, release guard and actionlint.
 
+- [ ] T7 `scripts/check.py`, the native hook and scope fixtures use staged lock paths and distinguish unrelated YAML documents. Run native scope, hook and check suites (AC-01, AC-03).
+
 ## Open Questions
 
 None.
