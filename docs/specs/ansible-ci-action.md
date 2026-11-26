@@ -71,6 +71,7 @@ None.
 | --- | --- | --- | --- | --- | --- | --- |
 | 2026-11-26 | R-1 | spec | `d5bd9419c917b29030e37cf74d42c7a5b7a9abcd` | unknown | procedural | Inventory isolation and selected lint scope need explicit tests. |
 | 2026-11-26 | R-2 | spec | `f6b110f692c5d18ceb9078232707429e9a2d37c5` | unknown | procedural | Production-profile warnings must fail. |
+| 2026-11-26 | R-3 | spec | `d6d0e63d36caf35ca942b8f3f52b7e35e4d86481` | unknown | procedural | The warning fixture must match the action's lint scope. |
 
 ### R-1
 
@@ -124,6 +125,15 @@ SEVERITY: blocking
 WHERE: Design lint invocation and suppression handling, AC-01, Test Plan AC-01
 EVIDENCE: The revision addressing R-1 F-02 rejects suppressions in project configuration and ignore files, but retains `ansible-lint --offline --profile production` without strict mode. Ansible-lint's own default warning list includes `fqcn[deep]`, a subrule of `fqcn` in the production profile. An unconfigured repository can therefore report a production-profile violation and exit zero despite AC-01 requiring failure. A negative fixture that uses a rule already treated as an error would miss this case. https://docs.ansible.com/projects/lint/usage/ https://docs.ansible.com/projects/lint/profiles/
 PROPOSAL: Require strict mode so warnings from selected rules fail without relying on project configuration. Add a clean-config fixture that trips a selected rule normally reported as a warning, and verify the wrapper fails on that diagnostic.
+
+### R-3
+
+FINDING: F-01
+KIND: factual
+SEVERITY: blocking
+WHERE: Design explicit lint scope, AC-01, Test Plan AC-01
+EVIDENCE: The revision addressing R-2 F-01 adds a nested Python collection plugin as proof of strict mode. The design resolves playbooks and roles as explicit lint targets. Ansible-lint's `fqcn[deep]` rule checks a lintable whose kind is `plugin`. A correct implementation that passes only the specified playbooks and roles to the linter can miss that fixture. https://github.com/ansible/ansible-lint/blob/main/src/ansiblelint/rules/fqcn.py
+PROPOSAL: Use a `jinja[spacing]` warning in an otherwise clean playbook, within the existing lint scope. Prove it exits zero with native non-strict lint and fails with the expected diagnostic through the wrapper.
 
 ## Sources
 
