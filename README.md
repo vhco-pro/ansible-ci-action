@@ -42,7 +42,7 @@ Copy [the native hook](examples/native-hook/.githooks/pre-commit) to
 `.githooks/pre-commit` and set the repo-local `core.hooksPath` to `.githooks`
 after checking for existing hooks. Set `ANSIBLE_CI_CHECK` to the pinned check
 script and point it at the prepared Python environment. The hook uses the Git
-index and skips unrelated changes. Run full verification before pushing.
+index, follows literal task imports and skips unrelated changes. Run full verification before pushing.
 
 For diagnosis in the prepared environment with synthetic inventory:
 

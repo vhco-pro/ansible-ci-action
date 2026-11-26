@@ -47,8 +47,8 @@ Deliver one composite, its direct check script, native Git hook example, public 
 - [x] AC-01: Clean Ansible content passes the production profile and syntax checks. Production-rule violations, syntax failures, suppressed checks on selected content and empty scopes fail.
       Evidence: tests/check.sh and tests/scope.sh refused malformed or suppressed plays and accepted a clean play beside unrelated multi-document YAML.
 - [ ] AC-02: The action uses its exact dependency pins, reports installed versions and rejects an invalid profile, an escaping path, dynamic inventory or failed setup. Syntax checking uses isolated synthetic inventory without ambient configuration or credentials.
-- [ ] AC-03: The direct command and native hook share validation behavior. Hook checks skip unrelated staged files, select affected Ansible content and use the index snapshot. The source and index stay intact.
-      Evidence: R-7 found a staged short-name task was missed when imported from a play outside conventional task directories.
+- [x] AC-03: The direct command and native hook share validation behavior. Hook checks skip unrelated staged files, select affected Ansible content and use the index snapshot. The source and index stay intact.
+      Evidence: tests/scope.sh imported-task confirmed identical direct and staged refusals. Remaining scope and hook fixtures passed with unrelated files skipped and index preserved.
 - [ ] AC-04: The repository contains synthetic read-only public fixtures, lintable workflows and shared GitVersion release wiring that requires passing fixture tests before tagging.
 
 ## Test Plan
@@ -81,7 +81,9 @@ Deliver one composite, its direct check script, native Git hook example, public 
 
       Evidence: The unrelated YAML list and stream, staged archive outside ci/, and nested ignore-file fixtures failed before the change and passed after it. Native, hook, release and actionlint suites passed.
 
-- [ ] T8 `scripts/check.py` and `tests/scope.sh` select staged files referenced by literal imports. Verify the imported task refusal and the unrelated YAML allowance (AC-03).
+- [x] T8 `scripts/check.py` and `tests/scope.sh` select staged files referenced by literal imports. Verify the imported task refusal and the unrelated YAML allowance (AC-03).
+
+      Evidence: The imported-task fixture passed outside the hook and then showed the missing staged refusal. After repair, both paths refused the short module name. Scope, check, hook, release and lint suites passed.
 
 ## Open Questions
 

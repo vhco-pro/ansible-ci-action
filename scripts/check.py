@@ -23,6 +23,7 @@ TASK_KEYS = {
     "action", "local_action", "block", "rescue", "always", "register", "notify",
     "include_tasks", "import_tasks", "include_role", "import_role", "include_vars",
 }
+FILE_DIRECTIVES = {"import_tasks", "include_tasks", "import_playbook", "include_vars", "vars_files"}
 PLAY_HEADERS = {"hosts", "import_playbook"}
 PLAY_BODY = {"tasks", "pre_tasks", "post_tasks", "handlers", "roles", "gather_facts"}
 DEPENDENCY_DIRS = {"roles", "tasks", "handlers", "defaults", "vars", "templates", "files", "meta", "group_vars", "host_vars"}
@@ -98,6 +99,63 @@ def lint_targets(scope):
     return targets, incomplete
 
 
+def reference_values(node):
+    if isinstance(node, yaml.ScalarNode):
+        return [node.value]
+    if isinstance(node, yaml.SequenceNode):
+        return [item.value for item in node.value if isinstance(item, yaml.ScalarNode)]
+    if isinstance(node, yaml.MappingNode):
+        return [
+            value.value for key, value in node.value
+            if isinstance(key, yaml.ScalarNode) and key.value in {"file", "dir"}
+            and isinstance(value, yaml.ScalarNode)
+        ]
+    return []
+
+
+def literal_references(text):
+    nodes = list(yaml.compose_all(text))
+    seen = set()
+    while nodes:
+        node = nodes.pop()
+        if id(node) in seen:
+            continue
+        seen.add(id(node))
+        if isinstance(node, yaml.SequenceNode):
+            nodes.extend(node.value)
+        elif isinstance(node, yaml.MappingNode):
+            for key, value in node.value:
+                nodes.append(value)
+                if isinstance(key, yaml.ScalarNode) and key.value.rsplit(".", 1)[-1] in FILE_DIRECTIVES:
+                    for reference in reference_values(value):
+                        if reference and not any(marker in reference for marker in ("{{", "{%", "{#")):
+                            yield reference
+
+
+def referenced_paths(tree, targets):
+    pending = []
+    for target in targets:
+        if target.is_file():
+            pending.append(target)
+        else:
+            pending.extend(file for file in target.rglob("*") if file.is_file() and file.suffix in YAML_SUFFIXES)
+    references = set()
+    visited = set()
+    while pending:
+        source = pending.pop()
+        if source in visited:
+            continue
+        visited.add(source)
+        for reference in literal_references(source.read_text()):
+            path = (source.parent / reference).resolve()
+            if not path.is_relative_to(tree):
+                continue
+            references.add(path)
+            if path.is_file() and path.suffix in YAML_SUFFIXES:
+                pending.append(path)
+    return references
+
+
 def changed_scopes(workspace, scope, inventory):
     paths = git_paths(workspace, "diff", "--cached", "--no-renames", "--name-only", "-z")
     inventory_path = Path(os.path.normpath(inventory)) if inventory else None
@@ -111,23 +169,29 @@ def changed_scopes(workspace, scope, inventory):
             return None
         if path.as_posix().endswith(CONFIG_NAMES + IGNORE_NAMES) or path.name == "ansible.cfg":
             return None
-        if not path.is_relative_to(scope) or any(part.startswith(".") for part in path.parts):
+        if any(part.startswith(".") for part in path.parts):
             continue
-        relative = path.relative_to(scope)
-        if set(relative.parts[:-1]) & DEPENDENCY_DIRS:
+        if path.is_relative_to(scope) and set(path.relative_to(scope).parts[:-1]) & DEPENDENCY_DIRS:
             return None
         if path.suffix in YAML_SUFFIXES:
-            changed.append(relative)
+            changed.append(path)
     return changed
 
 
-def select_targets(scope, staged_changes, workspace, relative_scope):
+def select_targets(tree, scope, staged_changes, workspace):
     targets, incomplete = lint_targets(scope)
     if staged_changes is None:
         return targets, incomplete
+    paths = [tree / relative for relative in staged_changes]
+    if all(path in targets for path in paths):
+        return paths, incomplete
+    references = referenced_paths(tree, targets)
+    if any(path.resolve().is_relative_to(reference) for path in paths for reference in references):
+        return targets, incomplete
     selected = []
-    for relative in staged_changes:
-        path = scope / relative
+    for relative, path in zip(staged_changes, paths, strict=True):
+        if not path.is_relative_to(scope):
+            continue
         if path in targets:
             selected.append(path)
             continue
@@ -135,7 +199,7 @@ def select_targets(scope, staged_changes, workspace, relative_scope):
             text = path.read_text()
         else:
             before = subprocess.run(
-                ["git", "-C", str(workspace), "show", f"HEAD:{relative_scope / relative}"],
+                ["git", "-C", str(workspace), "show", f"HEAD:{relative}"],
                 stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, check=False,
             )
             text = before.stdout.decode() if before.returncode == 0 else ""
@@ -301,7 +365,7 @@ def main():
         tree.mkdir()
         snapshot(workspace, tree, args.staged)
         root = tree / scope
-        targets, incomplete = select_targets(root, changes, workspace, scope)
+        targets, incomplete = select_targets(tree, root, changes, workspace)
         if not targets:
             if args.staged:
                 return 0

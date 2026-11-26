@@ -2,7 +2,7 @@
 set -euo pipefail
 repo=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 if [[ $# -eq 0 ]]; then
-  for fixture in malformed metadata metadata-list yaml-stream inventory role staged-archive nested-ignore; do
+  for fixture in malformed metadata metadata-list yaml-stream inventory role staged-archive nested-ignore imported-task; do
     "$0" "$fixture"
   done
   exit 0
@@ -72,6 +72,20 @@ case "$case_name" in
     printf 'play.yml fqcn[action-core]\n' > ansible/.config/ansible-lint-ignore.txt
     git add -- ansible/.config/ansible-lint-ignore.txt
     refuse 'Lint ignore entries are unsupported' "$hook"
+    ;;
+  imported-task)
+    sed -i '/    - name: Report fixture/,$d' play.yml
+    printf '%s\n' '    - name: Load fixture task' '      ansible.builtin.import_tasks: setup.yml' >> play.yml
+    printf '%s\n' '---' '- name: Report fixture' '  ansible.builtin.debug:' '    msg: "synthetic"' > setup.yml
+    commit_fixture play.yml setup.yml
+    "$ANSIBLE_CI_CHECK"
+    sed -i 's/ansible.builtin.debug/debug/' setup.yml
+    git add -- setup.yml
+    refuse 'fqcn[action-core]' "$ANSIBLE_CI_CHECK"
+    index=$(git write-tree)
+    refuse 'fqcn[action-core]' "$hook"
+    refuse 'fqcn[action-core]' "$ANSIBLE_CI_CHECK" --staged
+    test "$index" = "$(git write-tree)"
     ;;
   inventory)
     printf '[fixture]\nlocalhost ansible_connection=local\n' > fixture.ini
