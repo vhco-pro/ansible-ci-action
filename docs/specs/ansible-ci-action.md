@@ -44,11 +44,11 @@ Deliver one composite, its direct check script, native Git hook example, public 
 
 ## Acceptance Criteria
 
-- [x] AC-01: Clean Ansible content passes the production profile and syntax checks. Production-rule violations, syntax failures, suppressed checks on selected content and empty scopes fail.
-      Evidence: tests/check.sh and tests/scope.sh refused malformed or suppressed plays and accepted a clean play beside unrelated multi-document YAML.
+- [ ] AC-01: Clean Ansible content passes the production profile and syntax checks. Production-rule violations, syntax failures, suppressed checks on selected content and empty scopes fail.
+      Evidence: R-9 found that the check rejects a valid handler-only role.
 - [ ] AC-02: The action uses its exact dependency pins, reports installed versions and rejects an invalid profile, an escaping path, dynamic inventory or failed setup. Syntax checking uses isolated synthetic inventory without ambient configuration or credentials.
-- [x] AC-03: The direct command and native hook share validation behavior. Hook checks skip unrelated staged files, select affected Ansible content and use the index snapshot. The source and index stay intact.
-      Evidence: tests/scope.sh imported-task confirmed identical direct and staged refusals. Remaining scope and hook fixtures passed with unrelated files skipped and index preserved.
+- [ ] AC-03: The direct command and native hook share validation behavior. Hook checks skip unrelated staged files, select affected Ansible content and use the index snapshot. The source and index stay intact.
+      Evidence: R-9 found that the staged check skips a JSON file referenced by a playbook.
 - [ ] AC-04: The repository contains synthetic read-only public fixtures, lintable workflows and shared GitVersion release wiring that requires passing fixture tests before tagging.
 
 ## Test Plan
@@ -102,6 +102,8 @@ None.
 | 2026-11-26 | R-6 | implementation | `332d1b9c00959571a22062490717d0a792c8c8bd` | unknown | procedural | Unrelated YAML and staged locked archives need fixes. |
 | 2026-11-26 | R-7 | implementation | `aebe22dddaece8190b838f35e1f1c2a5fdf9b9ed` | unknown | procedural | The staged scope missed a literal import. |
 | 2026-11-26 | R-8 | implementation | `b25012384abe82fe8c15d06aeb81eaee086cdeef` | unknown | procedural | Native criteria met. Hosted execution pending. |
+
+| 2026-11-26 | R-9 | implementation | `e661aefe97563d77e84fba53d02b09d0fd378937` | unknown | procedural | Hosted fixtures passed. Role discovery and staged variable files need fixes. |
 
 ### R-1
 
@@ -289,6 +291,59 @@ EVIDENCE: At b25012384abe82fe8c15d06aeb81eaee086cdeef, `tests/hook.sh` and all n
 CRITERION: AC-04 The repository contains synthetic read-only public fixtures, lintable workflows and shared GitVersion release wiring that requires passing fixture tests before tagging.
 VERDICT: not verified
 EVIDENCE: At b25012384abe82fe8c15d06aeb81eaee086cdeef, actionlint 1.7.12 and `tests/release.sh` passed. Workflow inspection confirmed read-only fixture jobs with checkout credentials disabled and a fixture gate before either publication path. Hosted fixture execution was not observed.
+
+### R-9
+
+CRITERION: AC-01 Clean Ansible content passes the production profile and syntax checks. Production-rule violations, syntax failures, suppressed checks on selected content and empty scopes fail.
+VERDICT: not met
+EVIDENCE: At e661aefe97563d77e84fba53d02b09d0fd378937, tests/check.sh and tests/scope.sh passed with the pinned toolchain. In a separate tracked fixture, pinned ansible-lint returned 0 for a clean standalone role containing only handlers/main.yml. The wrapper returned 1 with "No Ansible content in working-directory" for that role.
+
+CRITERION: AC-02 The action uses its exact dependency pins, reports installed versions and rejects an invalid profile, an escaping path, dynamic inventory or failed setup. Syntax checking uses isolated synthetic inventory without ambient configuration or credentials.
+VERDICT: met
+EVIDENCE: The exact commit's GitHub Actions run 45846041860 passed the composite, compared its outputs against the local command, and ran tests/setup.sh on the hosted runner. Its logs show Python 3.14.10, ansible-core 2.22.0 and ansible-lint 26.11.1, plus refusal of both a wrong Python checksum and corrupt wheel hashes. Locally, tests/check.sh and tests/scope.sh passed the path, profile, inventory, archive and environment assertions, including the synthetic credential sentinel check.
+
+CRITERION: AC-03 The direct command and native hook share validation behavior. Hook checks skip unrelated staged files, select affected Ansible content and use the index snapshot. The source and index stay intact.
+VERDICT: not met
+EVIDENCE: At the reviewed commit, tests/hook.sh and tests/scope.sh passed the partial-stage, unrelated-file, shared-config, imported-task and index assertions. In a separate fixture, I staged only a value change to a tracked JSON file listed in the playbook's vars_files. The hook and direct staged mode exited 0 without invoking lint. The ordinary direct command linted the affected playbook and reported a production-profile pass. The fixture's Git index tree stayed identical across the checks.
+
+CRITERION: AC-04 The repository contains synthetic read-only public fixtures, lintable workflows and shared GitVersion release wiring that requires passing fixture tests before tagging.
+VERDICT: met
+EVIDENCE: Local actionlint 1.7.12 and tests/release.sh passed on the exact export. GitHub run 45846041860 completed successfully at e661aefe97563d77e84fba53d02b09d0fd378937, with both fixtures and workflows jobs passing. The pinned release workflow calls GitVersion only after the fixture and ref gates, and recovery uses the shared GitHub Release action at a stable tag verified against the tested commit. This review exercised release eligibility on synthetic refs without publishing.
+
+FINDING: F-01
+KIND: factual
+SEVERITY: blocking
+WHERE: scripts/check.py:81-99, README.md:3-5, AC-01
+EVIDENCE: Role discovery requires tasks/main.yml or tasks/main.yaml. A handler-only role is a supported Ansible role layout and passed the pinned native linter, but the wrapper refused it as an empty scope. https://docs.ansible.com/projects/ansible/latest/playbook_guide/playbooks_reuse_roles.html#role-directory-structure
+PROPOSAL: Discover roles from Ansible's supported role layout, including roles without a default task entry point. Add a synthetic role-only regression through the public check command.
+
+FINDING: F-02
+KIND: factual
+SEVERITY: blocking
+WHERE: examples/native-hook/.githooks/pre-commit:17-28, scripts/check.py:159-177, AC-03
+EVIDENCE: Both staged entry points skipped a tracked JSON dependency referenced by a playbook's literal vars_files entry. Staged filtering dropped the file before the reference resolver could select its playbook.
+PROPOSAL: Consider staged changes to literal dependencies before filtering by suffix. Keep the skip for unrelated staged paths and prove both outcomes through the sample hook.
+
+FINDING: F-03
+KIND: factual
+SEVERITY: should-fix
+WHERE: scripts/.tool-versions, scripts/python-archive.tsv, scripts/setup.sh:37-57, scripts/requirements.txt:1-2, tests/setup.sh:5-6, renovate.json, Design tool pins, conventions/delivery.md#pinning-and-updates
+EVIDENCE: Renovate's asdf manager can find the Python version in .tool-versions, but no configured update mechanism pairs a change there with the standalone archive build and verified digest. The setup test hardcodes the old Python patch, and the lock generation command independently carries it. The next version-only update cannot install and pass setup as proposed. https://docs.renovatebot.com/modules/manager/asdf/
+PROPOSAL: Make the executable archive pin's full update discoverable and keep the runtime version, build and verified digest together. Derive the setup test expectation from the expected runtime pin and prove that the updater can prepare a usable version change.
+
+FINDING: F-04
+KIND: factual
+SEVERITY: should-fix
+WHERE: GitHub repository settings, conventions/delivery.md#git-and-versioning
+EVIDENCE: The repository API reports delete_branch_on_merge false. The delivery convention requires it enabled.
+PROPOSAL: Enable automatic merged-branch deletion for this repository.
+
+FINDING: F-05
+KIND: factual
+SEVERITY: should-fix
+WHERE: GitHub repository settings, .github/workflows/, conventions/repository-security.md#public-repositories
+EVIDENCE: GitHub reports secret scanning and push protection disabled and private vulnerability reporting false for this public repository. Default CodeQL is not configured, and the proposed tree has no calls to the required shared CodeQL and Scorecard workflows.
+PROPOSAL: Enable the public-repository security settings and add the pinned shared CodeQL and Scorecard callers for the supported languages and repository type.
 
 ## Sources
 
