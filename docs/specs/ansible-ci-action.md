@@ -107,6 +107,7 @@ None.
 | 2026-11-26 | R-8 | implementation | `b25012384abe82fe8c15d06aeb81eaee086cdeef` | unknown | procedural | Native criteria met. Hosted execution pending. |
 
 | 2026-11-26 | R-9 | implementation | `e661aefe97563d77e84fba53d02b09d0fd378937` | unknown | procedural | Hosted fixtures passed. Role discovery and staged variable files need fixes. |
+| 2026-11-26 | R-10 | implementation | `8a60b5e3f9448b34dddac071bf2e7ff4b5c2b0dd` | unknown | procedural | Hosted fixtures passed. Alternate role entries and unrelated staged edits need fixes. |
 
 ### R-1
 
@@ -347,6 +348,45 @@ SEVERITY: should-fix
 WHERE: GitHub repository settings, .github/workflows/, conventions/repository-security.md#public-repositories
 EVIDENCE: GitHub reports secret scanning and push protection disabled and private vulnerability reporting false for this public repository. Default CodeQL is not configured, and the proposed tree has no calls to the required shared CodeQL and Scorecard workflows.
 PROPOSAL: Enable the public-repository security settings and add the pinned shared CodeQL and Scorecard callers for the supported languages and repository type.
+
+### R-10
+
+CRITERION: AC-01 Clean Ansible content passes the production profile and syntax checks. Production-rule violations, syntax failures, suppressed checks on selected content and empty scopes fail.
+VERDICT: not met
+EVIDENCE: At 8a60b5e3f9448b34dddac071bf2e7ff4b5c2b0dd, local tests/check.sh and tests/scope.sh passed, including the revised handler-only fixture. In a separate scoped role with only tasks/configure.yml, pinned ansible-lint passed the production profile and pinned ansible-playbook --syntax-check accepted an import_role with tasks_from: configure. The check script exited 1 with "No Ansible content in working-directory" when asked to check that standalone role.
+
+CRITERION: AC-02 The action uses its exact dependency pins, reports installed versions and rejects an invalid profile, an escaping path, dynamic inventory or failed setup. Syntax checking uses isolated synthetic inventory without ambient configuration or credentials.
+VERDICT: met
+EVIDENCE: GitHub Actions Test run 45857577938 completed successfully at 8a60b5e3f9448b34dddac071bf2e7ff4b5c2b0dd. The composite accepted the clean fixture, and the comparison step confirmed the failing composite outcome and the same Python 3.14.10, ansible-core 2.22.0 and ansible-lint 26.11.1 versions as the direct check. The hosted setup fixture reported the archive-checksum and wheel-hash refusals. Local tests/check.sh and tests/scope.sh passed the invalid profile, escaping path, dynamic inventory, locked archive and isolated process assertions.
+
+CRITERION: AC-03 The direct command and native hook share validation behavior. Hook checks skip unrelated staged files, select affected Ansible content and use the index snapshot. The source and index stay intact.
+VERDICT: not met
+EVIDENCE: At the reviewed commit, local tests/hook.sh and tests/scope.sh passed, including the JSON reference, partial-stage, unrelated-file, and index assertions. In an independent repository with a valid playbook and a pre-existing unfinished YAML example under docs, I staged only README.md. The new hook exited 1 with a YAML parser diagnostic for the unchanged example. The previous hook skipped the same staged edit and exited 0.
+
+CRITERION: AC-04 The repository contains synthetic read-only public fixtures, lintable workflows and shared GitVersion release wiring that requires passing fixture tests before tagging.
+VERDICT: met
+EVIDENCE: Local actionlint 1.7.12 and tests/release.sh passed on the exact export. The fixtures and workflows jobs passed in hosted run 45857577938 at the same commit. The release workflow requires the read-only fixture workflow before the ref gate and the pinned shared GitVersion release call. The recovery path calls the pinned shared Release action after validating the tested exact stable tag. I verified eligibility on synthetic refs without publishing.
+
+FINDING: F-01
+KIND: factual
+SEVERITY: blocking
+WHERE: scripts/check.py:21-22, scripts/check.py:83-101, AC-01
+EVIDENCE: After adding standard main entry points for roles, discovery still ignores standard role content with an alternate task entry point. A scoped role with only tasks/configure.yml passed the production linter, and an import_role using tasks_from: configure passed native syntax checking. The wrapper rejected the role as empty.
+PROPOSAL: Recognize roles with standard role directories and alternate entry points. Add a fixture with an alternate task entry point that passes both selection and native verification.
+
+FINDING: F-02
+KIND: factual
+SEVERITY: blocking
+WHERE: examples/native-hook/.githooks/pre-commit:7-9, scripts/check.py:83-95, scripts/check.py:182-190, AC-03
+EVIDENCE: The change that permits staged JSON references now sends every nonempty stage to a scope-wide YAML parse. An unchanged, unrelated unfinished YAML example under docs prevented a commit with only README.md staged. The parse runs before the code decides whether the staged file affects any playbook.
+PROPOSAL: Check staged relevance before rejecting parse failures in unrelated files. Keep refusal of malformed selected Ansible content and add a regression that covers unrelated staging with a pre-existing incomplete YAML sample.
+
+FINDING: F-03
+KIND: factual
+SEVERITY: should-fix
+WHERE: scripts/.tool-versions, scripts/python-archive.tsv, scripts/setup.sh:37-57, scripts/requirements.txt:1-2, renovate.json, Design tool pins, conventions/delivery.md#pinning-and-updates
+EVIDENCE: The setup fixture now derives its expected version from .tool-versions. Renovate can discover that Python version, while the required build date and independently pinned SHA-256 remain outside its configured update path. The lock generation command also carries the Python version. A standalone update to the asdf pin still leaves the installer pointed at the previous build and checksum. https://docs.renovatebot.com/modules/manager/asdf/
+PROPOSAL: Make the executable archive's version, build and verified digest part of one reviewable update. Verify the updater can prepare the corresponding hash-locked dependency update against that runtime.
 
 ## Sources
 
