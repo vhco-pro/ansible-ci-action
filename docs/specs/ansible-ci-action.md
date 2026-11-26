@@ -1,6 +1,6 @@
 ---
-status: draft
-status_description: "Owner-approved design captured for independent specification review."
+status: planned
+status_description: "The owner accepted the reviewed specification."
 issue: https://github.com/vhco-pro/ansible-ci-action/issues/1
 goal: "Consumers can run the same production-profile Ansible checks locally and in GitHub Actions."
 covers:
@@ -73,6 +73,7 @@ None.
 | 2026-11-26 | R-2 | spec | `f6b110f692c5d18ceb9078232707429e9a2d37c5` | unknown | procedural | Production-profile warnings must fail. |
 | 2026-11-26 | R-3 | spec | `d6d0e63d36caf35ca942b8f3f52b7e35e4d86481` | unknown | procedural | The warning fixture must match the action's lint scope. |
 | 2026-11-26 | R-4 | spec | `6199a51ae0db55326f5e33bc320ce1d1e0938847` | unknown | procedural | No findings. |
+| 2026-11-26 | R-4 | spec | `6199a51ae0db55326f5e33bc320ce1d1e0938847` | n/a | n/a | accepted by owner |
 
 ### R-1
 
