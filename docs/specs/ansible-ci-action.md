@@ -45,13 +45,13 @@ Deliver one composite, its direct check script, native Git hook example, public 
 ## Acceptance Criteria
 
 - [x] AC-01: Clean Ansible content passes the production profile and syntax checks. Production-rule violations, syntax failures, suppressed checks on selected content and empty scopes fail.
-      Evidence: R-11 confirmed production lint and syntax, including alternate role task entries.
+      Evidence: R-12 confirmed native production lint and syntax, including handler-only and alternate task entries.
 - [x] AC-02: The action uses its exact dependency pins, reports installed versions and rejects an invalid profile, an escaping path, dynamic inventory or failed setup. Syntax checking uses isolated synthetic inventory without ambient configuration or credentials.
-      Evidence: R-11 confirmed installed-version and verdict comparisons in public run 45858870721, plus isolated input and checksum refusals.
-- [ ] AC-03: The direct command and native hook share validation behavior. Hook checks skip unrelated staged files, select affected Ansible content and use the index snapshot. The source and index stay intact.
-      Evidence: R-11 found that an unfinished, unchanged role task file still blocks an unrelated staged edit.
+      Evidence: R-12 confirmed the versions, composite verdicts, checksum refusals and isolation in public run 45859953475 and native tests.
+- [x] AC-03: The direct command and native hook share validation behavior. Hook checks skip unrelated staged files, select affected Ansible content and use the index snapshot. The source and index stay intact.
+      Evidence: R-12 confirmed the hook skips unrelated edits, detects referenced files and still rejects malformed selected role inputs.
 - [x] AC-04: The repository contains synthetic read-only public fixtures, lintable workflows and shared GitVersion release wiring that requires passing fixture tests before tagging.
-      Evidence: R-11 confirmed public run 45858870721, actionlint and the synthetic release gate tests.
+      Evidence: R-12 confirmed public run 45859953475, actionlint and the release gate tests.
 
 ## Test Plan
 
@@ -116,6 +116,7 @@ None.
 | 2026-11-26 | R-9 | implementation | `e661aefe97563d77e84fba53d02b09d0fd378937` | unknown | procedural | Hosted fixtures passed. Role discovery and staged variable files need fixes. |
 | 2026-11-26 | R-10 | implementation | `8a60b5e3f9448b34dddac071bf2e7ff4b5c2b0dd` | unknown | procedural | Hosted fixtures passed. Alternate role entries and unrelated staged edits need fixes. |
 | 2026-11-26 | R-11 | implementation | `a7e80a8073b3692fe2ff09ff86814d268dd8d4d8` | unknown | procedural | Three criteria met. An unfinished role file still blocks an unrelated staged edit. |
+| 2026-11-26 | R-12 | implementation | `cdafd6932e926c606ef829dc7888b10a4d472487` | unknown | procedural | All four criteria met. Python archive updates still require manual review. |
 
 ### R-1
 
@@ -427,6 +428,31 @@ SEVERITY: should-fix
 WHERE: README.md:63-68, scripts/.tool-versions, scripts/python-archive.tsv, scripts/setup.sh:37-57, scripts/requirements.txt:1-2, renovate.json, Design tool pins, conventions/delivery.md#pinning-and-updates
 EVIDENCE: The README now documents the deliberate manual update of the upstream standalone build and independently verified archive digest. Renovate can propose the .tool-versions change, and its configured managers do not discover the coupled archive build and SHA-256. A version-only proposal remains incomplete, and archive-build changes for the same Python version remain manual. https://docs.renovatebot.com/modules/manager/asdf/
 PROPOSAL: Make the underlying archive dependency discoverable and coordinate its version, build, verified digest, and generated lock in a single reviewable update.
+
+### R-12
+
+CRITERION: AC-01 Clean Ansible content passes the production profile and syntax checks. Production-rule violations, syntax failures, suppressed checks on selected content and empty scopes fail.
+VERDICT: met
+EVIDENCE: At cdafd6932e926c606ef829dc7888b10a4d472487, local tests/check.sh and tests/scope.sh exited 0 with the pinned toolchain. They checked clean playbooks and handler-only and alternate-entry roles, and asserted refusals for strict warnings, production-rule violations, missing modules, suppressed checks and empty scopes.
+
+CRITERION: AC-02 The action uses its exact dependency pins, reports installed versions and rejects an invalid profile, an escaping path, dynamic inventory or failed setup. Syntax checking uses isolated synthetic inventory without ambient configuration or credentials.
+VERDICT: met
+EVIDENCE: GitHub Actions Test run 45859953475 finished successfully at cdafd6932e926c606ef829dc7888b10a4d472487. The fixture logs show the composite failing as expected on the negative fixture and matching the direct check's Python 3.14.10, ansible-core 2.22.0 and ansible-lint 26.11.1 outputs. The hosted setup fixture ran a fresh installation and reported refusals for the wrong archive checksum and corrupt package hashes. Local tests/check.sh and tests/scope.sh passed the invalid profile, escaping path, dynamic inventory, locked dependency and isolated process assertions.
+
+CRITERION: AC-03 The direct command and native hook share validation behavior. Hook checks skip unrelated staged files, select affected Ansible content and use the index snapshot. The source and index stay intact.
+VERDICT: met
+EVIDENCE: Local tests/hook.sh and tests/scope.sh passed at the reviewed commit. I separately reran unrelated-role-draft, referenced-vars and imported-task. The README-only stage passed despite the unchanged malformed role task file and preserved the index. Staging an edit to that role made the hook report load-failure[yaml]. The staged JSON variable file and imported task selected their Ansible checks, and the fixtures verified index preservation. The partial-stage cases established that hook verdicts follow the staged rather than the working copy.
+
+CRITERION: AC-04 The repository contains synthetic read-only public fixtures, lintable workflows and shared GitVersion release wiring that requires passing fixture tests before tagging.
+VERDICT: met
+EVIDENCE: Local actionlint 1.7.12 and tests/release.sh exited 0 at the exact export. Both fixtures and workflows finished successfully in hosted run 45859953475. The read-only fixture workflow gates the ref check and the pinned shared GitVersion release workflow. Recovery calls the pinned shared release action after verifying the tested stable tag. The ref tests used synthetic commits and tags without publication.
+
+FINDING: F-01
+KIND: factual
+SEVERITY: should-fix
+WHERE: README.md:63-68, scripts/.tool-versions, scripts/python-archive.tsv, scripts/setup.sh:37-57, scripts/requirements.txt:1-2, renovate.json, Design tool pins, conventions/delivery.md#pinning-and-updates
+EVIDENCE: The README documents the manual update of the upstream standalone build and independently pinned archive digest. Renovate can discover the Python version in .tool-versions. The configured managers do not discover the coupled archive build and SHA-256, so a Python version-only proposal remains incomplete and same-version archive rebuilds still need manual discovery. https://docs.renovatebot.com/modules/manager/asdf/
+PROPOSAL: Make the archive dependency discoverable to the updater and coordinate the version, build, verified digest and generated dependency lock in one reviewed change.
 
 ## Sources
 
