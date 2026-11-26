@@ -44,11 +44,11 @@ Deliver one composite, its direct check script, native Git hook example, public 
 
 ## Acceptance Criteria
 
-- [x] AC-01: Clean Ansible content passes the production profile and syntax checks. Production-rule violations, syntax failures, suppressed checks on selected content and empty scopes fail.
-      Evidence: tests/check.sh passed clean content and refused warning-only Jinja, missing syntax dependency, lint suppression and empty scope.
+- [ ] AC-01: Clean Ansible content passes the production profile and syntax checks. Production-rule violations, syntax failures, suppressed checks on selected content and empty scopes fail.
+      Evidence: R-5 reproduced a malformed sibling the action did not select.
 - [ ] AC-02: The action uses its exact dependency pins, reports installed versions and rejects an invalid profile, an escaping path, dynamic inventory or failed setup. Syntax checking uses isolated synthetic inventory without ambient configuration or credentials.
-- [x] AC-03: The direct command and native hook share validation behavior. Hook checks skip unrelated staged files, select affected Ansible content and use the index snapshot. The source and index stay intact.
-      Evidence: tests/hook.sh verified the staged verdict and preserved the index and worktree.
+- [ ] AC-03: The direct command and native hook share validation behavior. Hook checks skip unrelated staged files, select affected Ansible content and use the index snapshot. The source and index stay intact.
+      Evidence: R-5 found that staged fixture inventory was missed and unrelated YAML triggered lint.
 - [ ] AC-04: The repository contains synthetic read-only public fixtures, lintable workflows and shared GitVersion release wiring that requires passing fixture tests before tagging.
 
 ## Test Plan
@@ -86,6 +86,7 @@ None.
 | 2026-11-26 | R-3 | spec | `d6d0e63d36caf35ca942b8f3f52b7e35e4d86481` | unknown | procedural | The warning fixture must match the action's lint scope. |
 | 2026-11-26 | R-4 | spec | `6199a51ae0db55326f5e33bc320ce1d1e0938847` | unknown | procedural | No findings. |
 | 2026-11-26 | R-4 | spec | `6199a51ae0db55326f5e33bc320ce1d1e0938847` | n/a | n/a | accepted by owner |
+| 2026-11-26 | R-5 | implementation | `0c8d87655b95c801ded036e6f717244d55ddf926` | unknown | procedural | Playbook selection, staged scope and local role archives need fixes. |
 
 ### R-1
 
@@ -152,6 +153,52 @@ PROPOSAL: Use a `jinja[spacing]` warning in an otherwise clean playbook, within 
 ### R-4
 
 NO FINDINGS
+
+### R-5
+
+CRITERION: AC-01 Clean Ansible content passes the production profile and syntax checks. Production-rule violations, syntax failures, suppressed checks on selected content and empty scopes fail.
+VERDICT: not met
+EVIDENCE: At 0c8d87655b95c801ded036e6f717244d55ddf926, `tests/check.sh` passed. In a separate synthetic repository, the pinned `ansible-playbook --syntax-check` exited 4 for a play missing `hosts`. The wrapper exited 0 and reported only one file checked because it selected the valid sibling.
+
+CRITERION: AC-02 The action uses its exact dependency pins, reports installed versions and rejects an invalid profile, an escaping path, dynamic inventory or failed setup. Syntax checking uses isolated synthetic inventory without ambient configuration or credentials.
+VERDICT: not met
+EVIDENCE: At 0c8d87655b95c801ded036e6f717244d55ddf926, `tests/setup.sh` independently installed Python 3.14.10, ansible-core 2.22.0 and ansible-lint 26.11.1, then refused both corrupt archive and wheel hashes. `tests/check.sh` passed its collection, input and environment checks. A valid checksum-locked local role archive failed installation before lint. Hosted composite outputs were not observed.
+
+CRITERION: AC-03 The direct command and native hook share validation behavior. Hook checks skip unrelated staged files, select affected Ansible content and use the index snapshot. The source and index stay intact.
+VERDICT: not met
+EVIDENCE: At 0c8d87655b95c801ded036e6f717244d55ddf926, `tests/hook.sh` passed its partial staging, index preservation and shared configuration tests. A separate inventory-only change passed both the hook and `check.sh --staged` despite the direct command rejecting it. An unrelated staged YAML mapping triggered lint and blocked the commit on an unchanged playbook.
+
+CRITERION: AC-04 The repository contains synthetic read-only public fixtures, lintable workflows and shared GitVersion release wiring that requires passing fixture tests before tagging.
+VERDICT: not verified
+EVIDENCE: At 0c8d87655b95c801ded036e6f717244d55ddf926, actionlint 1.7.12 and `tests/release.sh` passed. The workflows grant fixture jobs read access, disable checkout credential persistence, and put the shared version job behind the fixture gate. Hosted composite execution remains pending authorization.
+
+FINDING: F-01
+KIND: factual
+SEVERITY: blocking
+WHERE: AC-01, scripts/check.py lint_targets
+EVIDENCE: The playbook selector at scripts/check.py:71 recognizes `hosts` or `import_playbook`. A tracked sequence containing a named play and `tasks` but missing `hosts` exited 4 in the pinned native syntax checker with `The field 'hosts' is required but was not set.` Alongside a valid playbook, the wrapper exited 0 after checking one file.
+PROPOSAL: Select malformed playbook candidates when their structure identifies them as plays even with a required field absent. Add a valid sibling to the regression fixture and require the wrapper to fail on the missing-hosts diagnostic.
+
+FINDING: F-02
+KIND: factual
+SEVERITY: blocking
+WHERE: AC-02, scripts/check.py install_content, README.md content lock
+EVIDENCE: A tracked `ci/fixture_role-1.0.0.tar.gz` with valid `meta/main.yml` and `tasks/main.yml` and a matching SHA-256 failed at scripts/check.py:201. The pinned `ansible-galaxy role install` treats the positional absolute archive path as the role name and refuses it as outside the configured role directory. The current setup fixture tests collections only.
+PROPOSAL: Generate a role requirement with a validated role name and a separate local archive source. Retain checksum verification and disabled dependency fetching, and test that a playbook can resolve the installed role.
+
+FINDING: F-03
+KIND: factual
+SEVERITY: should-fix
+WHERE: AC-03, examples/native-hook/.githooks/pre-commit, scripts/check.py changed_scopes
+EVIDENCE: When only the configured `fixture.ini` was staged, the actual hook and `check.sh --staged` both exited 0. The direct command exited 1 with `fixture-inventory must name a static YAML or INI inventory file.` The hook's filters and staged selector omit the configured INI inventory path.
+PROPOSAL: Treat the configured inventory path as a dependency in both hook entry and staged scope selection. Add an inventory-only staged regression test that requires the same verdict as the direct command.
+
+FINDING: F-04
+KIND: factual
+SEVERITY: should-fix
+WHERE: AC-03, examples/native-hook/.githooks/pre-commit, scripts/check.py changed_scopes and select_targets
+EVIDENCE: Staging only `metadata.yml` with one unrelated description mapping invoked the actual checker. The hook exited 2 on `fqcn[action-core]` in an unchanged playbook. The shell passes any YAML path and the Python selector falls back to all Ansible targets for a YAML path that is not itself a target.
+PROPOSAL: Distinguish Ansible dependencies and candidate lint targets from unrelated YAML before invoking a full-scope check. Add an unrelated YAML fixture with an unchanged failing playbook.
 
 ## Sources
 
