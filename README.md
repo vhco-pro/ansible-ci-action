@@ -27,8 +27,9 @@ If syntax checks need external Ansible content, include a tracked
 names a `kind` of `role` or `collection`, a checkout-relative `archive` path,
 an exact `version`, and the archive's `sha256`. Supply the locked archives and
 their transitive dependencies. Role archives use one top-level directory
-whose name is the installed role name. Setup verifies hashes and installs locally
-with dependency fetching disabled.
+whose name is the installed role name. Archives can contain regular files and
+directories. Setup verifies hashes and installs locally with dependency fetching
+disabled.
 
 ## Local check and hook
 
@@ -62,5 +63,6 @@ to a separate authorized workflow.
 With the pinned environment, run `tests/setup.sh`, `tests/check.sh`,
 `tests/hook.sh`, `tests/release.sh`, and `actionlint`. Regenerate
 `scripts/requirements.txt` with wheel hashes for the pinned Python when
-updating controller dependencies. Verify the upstream archive digest before
-updating the Python pin.
+updating controller dependencies. For a Python version update, verify the
+upstream build and archive digest, update `scripts/python-archive.tsv` alongside
+`scripts/.tool-versions`, and regenerate the lock for the new Python version.

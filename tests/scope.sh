@@ -2,7 +2,7 @@
 set -euo pipefail
 repo=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 if [[ $# -eq 0 ]]; then
-  for fixture in malformed metadata metadata-list yaml-stream inventory role staged-archive nested-ignore imported-task handler-only referenced-vars; do
+  for fixture in malformed metadata metadata-list yaml-stream inventory role staged-archive nested-ignore imported-task handler-only alternate-task unrelated-invalid-yaml referenced-vars; do
     "$0" "$fixture"
   done
   exit 0
@@ -104,6 +104,36 @@ YAML
     git add -- "$handler"
     refuse 'fqcn[action-core]' "$ANSIBLE_CI_CHECK"
     refuse 'fqcn[action-core]' "$hook"
+    ;;
+  alternate-task)
+    rm -- play.yml
+    mkdir -p roles/alternate_task/tasks
+    task=roles/alternate_task/tasks/configure.yml
+    cat >"$task" <<'YAML'
+---
+- name: Report fixture
+  ansible.builtin.debug:
+    msg: synthetic
+YAML
+    commit_fixture "$task"
+    export ANSIBLE_CI_WORKING_DIRECTORY=roles/alternate_task
+    "$ANSIBLE_CI_CHECK"
+    sed -i 's/ansible.builtin.debug/debug/' "$task"
+    git add -- "$task"
+    refuse 'fqcn[action-core]' "$hook"
+    ;;
+  unrelated-invalid-yaml)
+    mkdir docs
+    printf '%s\n' 'unfinished: [' > docs/example.yml
+    commit_fixture play.yml docs/example.yml
+    printf '# Unrelated edit\n' > README.md
+    git add -- README.md
+    index=$(git write-tree)
+    "$hook"
+    test "$index" = "$(git write-tree)"
+    printf '%s\n' '  tasks: [' >> play.yml
+    git add -- play.yml
+    refuse 'expected the node content' "$hook"
     ;;
   referenced-vars)
     sed -i '/  tasks:/i\  vars_files: [variables.json]' play.yml

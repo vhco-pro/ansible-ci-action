@@ -80,19 +80,29 @@ def looks_like_tasks(keys):
     return bool(keys & (PLAY_HEADERS | PLAY_BODY | TASK_KEYS)) or any(key.count(".") >= 2 for key in keys)
 
 
-def lint_targets(scope):
+def lint_targets(scope, staged):
     roles = set()
     playbooks = []
     incomplete = set()
     for path in sorted(scope.rglob("*")):
         if not path.is_file() or any(part.startswith(".") for part in path.relative_to(scope).parts):
             continue
-        if path.name in ROLE_ENTRY_NAMES and path.parent.name in ROLE_ENTRY_DIRS:
-            roles.add(path.parent.parent)
+        role = path.parent.parent
+        role_entry = path.name in ROLE_ENTRY_NAMES or (
+            path.suffix in YAML_SUFFIXES and (role == scope or "roles" in role.parts)
+        )
+        if path.parent.name in ROLE_ENTRY_DIRS and role_entry:
+            roles.add(role)
             continue
         if path.suffix not in YAML_SUFFIXES:
             continue
-        keys, multi_document = yaml_shape(path.read_text())
+        try:
+            keys, multi_document = yaml_shape(path.read_text())
+        except yaml.YAMLError:
+            # Staged selection parses changed and referenced files after discovery.
+            if not staged:
+                raise
+            continue
         if keys & (PLAY_HEADERS | PLAY_BODY):
             playbooks.append(path)
             if multi_document or not keys & PLAY_HEADERS:
@@ -180,7 +190,7 @@ def changed_scopes(workspace, scope, inventory):
 
 
 def select_targets(tree, scope, staged_changes, workspace):
-    targets, incomplete = lint_targets(scope)
+    targets, incomplete = lint_targets(scope, staged_changes is not None)
     if staged_changes is None:
         return targets, incomplete
     paths = [tree / relative for relative in staged_changes]
