@@ -19,11 +19,13 @@ covers:
 
 ### Owner summary
 
-One action checks Ansible content with a pinned controller and the production lint profile on Linux x64. The same check script runs locally. A native Git hook example can check the staged version of affected roles or playbooks after their dependencies are installed. Functional Molecule scenarios stay with the caller.
+One action checks Ansible content with a pinned controller and the production lint profile on Linux x64. The same check script runs locally. A native Git hook example checks affected roles or playbooks from the Git index after their dependencies are installed. The action runs syntax checks against synthetic inventory in an isolated configuration and process environment. Functional Molecule scenarios stay with the caller.
 
 Public fixtures exercise clean content, lint findings and syntax errors without an infrastructure target. The action starts on its own implementation branch. Release and consumer rollout need separate approval.
 
 ### Background
+
+Maintainers of multiple Ansible repositories would otherwise repeat the controller pins, lint configuration and GitHub permission rules in each repo. Carrying those rules in one action with a native local command gives a common verdict and one toolchain update path.
 
 The shared convention at [4635f7e](https://github.com/vhco-pro/docs/blob/4635f7e12f7a8d9b24046ef943bc382b0d74dff1/conventions/terraform-ansible.md) uses production-profile lint and syntax checking, with isolated functional scenarios where useful. A local probe with `ansible-playbook` core 2.18.18rc1 accepted a synthetic localhost playbook and refused one naming a missing collection action. This proves the syntax fixture behavior on that installed runtime. It precedes action, production-profile and pinned dependency verification.
 
@@ -33,27 +35,27 @@ Deliver one composite, its direct check script, native Git hook example, public 
 
 ## Design
 
-- Inputs are `working-directory` (default `.`), `profile` (default `production`) and optional `fixture-inventory`. Use standard project lint configuration discovery. Non-default profiles are for scoped compatibility with documented existing baselines. Reject unknown profiles, empty content scope, and out-of-checkout paths. Keep inventory synthetic and static.
-- Use a pinned Python release and hash-locked Python packages for `ansible-core` and `ansible-lint`. Install approved pinned roles and collections in a temporary environment when syntax checking requires them. Use verified archive downloads, expose the resolved `python-version`, `ansible-core-version` and `ansible-lint-version` via `GITHUB_OUTPUT`, and fail on dependency errors. Keep pins discoverable to the dependency updater.
-- Run `ansible-lint --offline --profile production` by default with unskipped syntax validation. Scope the runtime to fixture inventory with isolated tool state and no deployment credentials. Document the direct `ansible-playbook --syntax-check -i <fixture-inventory> <playbook>` command. Document `ansible-doc` for installed module contracts.
-- Both the composite and caller verification use the same shell script. Provide a native pre-commit example that checks the index snapshot with prepared dependencies. Full local verification can call caller-owned Molecule scenarios for convergence, idempotence and behavior assertions on disposable targets.
-- A callable public fixture workflow tests the action and direct verdict on Ubuntu 24.04 with read-only contents permission and disabled checkout credential persistence. Use the shared exact-tag release workflow after successful fixture tests. Pin external `uses:` references by full commit SHA and tag comment. Keep publication permissions confined to the release job.
+- Inputs are `working-directory` (default `.`), `profile` (default `production`) and optional `fixture-inventory`. Discover the project lint configuration with the native config names. Use the requested profile explicitly and fail closed on config or ignore-file entries that suppress or exclude checks in the selected scope. Existing code can adopt the action by selecting the covered paths under its recorded baseline. Resolve selected playbooks and roles explicitly and refuse an empty set, unknown profile, or out-of-checkout path. The default inventory is synthetic localhost. An override must be a checkout-relative static YAML or INI fixture file. Reject dynamic inventory and inventory plugin configuration.
+- Use a pinned Python release and hash-locked Python packages for `ansible-core` and `ansible-lint`. For content dependencies, use a checkout-relative `ci/ansible-content.lock` when present. It lists each required local role or collection archive with an exact version and SHA-256, including transitive dependencies. Install the verified archives in private temporary directories with dependency fetching disabled. Missing or invalid required archives fail, and failed setup cleans up its temporary state. Use verified archive downloads, expose the resolved `python-version`, `ansible-core-version` and `ansible-lint-version` via `GITHUB_OUTPUT`, and fail on dependency errors. Keep pins discoverable to the dependency updater.
+- Run `ansible-lint --offline --profile production` by default with unskipped syntax validation. Run the linter and inherited syntax subprocess with an allowlisted process environment, run-owned HOME, explicit generated Ansible config, and only the static YAML and INI inventory plugins. Keep the operator's Ansible config, inventory, plugin settings and credentials out of those processes. Use local verification for trusted checkouts because project content can include executable plugins. Document the direct `ansible-playbook --syntax-check -i <fixture-inventory> <playbook>` command. Document `ansible-doc` for installed module contracts.
+- Both the composite and caller verification use the same shell script. Provide a native pre-commit example that checks affected roles or entry-point playbooks from the index snapshot with prepared dependencies. An unrelated staged change skips lint. A change to shared configuration, inventory, content locks or dependencies selects every Ansible scope affected by it. Full local verification can call caller-owned Molecule scenarios for convergence, idempotence and behavior assertions on disposable targets.
+- A callable fixture workflow runs on Ubuntu 24.04 with read-only contents permission and disabled checkout credential persistence. SHA-pin external actions with release comments. A default-branch push can call the shared GitVersion workflow after the fixtures pass. Pull requests run the fixtures with read-only permissions. Manual recovery accepts only an existing exact stable version tag that resolves to the tested commit. After the same fixture gate, recovery calls the shared GitHub Release action for that exact tag. Serialize publication across push and recovery runs and preserve existing releases.
 
 ## Acceptance Criteria
 
-- [ ] AC-01: Clean Ansible content passes the production profile and syntax checks. Production-rule violations, syntax failures and empty scopes fail.
-- [ ] AC-02: The action uses its exact dependency pins, reports installed versions and rejects an invalid profile, escaping path or failed setup.
-- [ ] AC-03: The direct command and native hook share validation behavior. Hook checks use staged content and preserve the source and index.
+- [ ] AC-01: Clean Ansible content passes the production profile and syntax checks. Production-rule violations, syntax failures, suppressed checks on selected content and empty scopes fail.
+- [ ] AC-02: The action uses its exact dependency pins, reports installed versions and rejects an invalid profile, an escaping path, dynamic inventory or failed setup. Syntax checking uses isolated synthetic inventory without ambient configuration or credentials.
+- [ ] AC-03: The direct command and native hook share validation behavior. Hook checks skip unrelated staged files, select affected Ansible content and use the index snapshot. The source and index stay intact.
 - [ ] AC-04: The repository contains synthetic read-only public fixtures, lintable workflows and shared GitVersion release wiring that requires passing fixture tests before tagging.
 
 ## Test Plan
 
 | Criterion | Proof |
 | --- | --- |
-| AC-01 | Run `tests/check.sh` with a clean playbook, a lint-only violation, a missing module and an empty directory. Assert the expected exit and specific finding for each failure. Compare tracked inputs before and after. |
-| AC-02 | Run `tests/setup.sh` with an exact lock and a corrupted hash. Run `tests/check.sh` with an unknown profile and an out-of-checkout path. The callable workflow verifies reported versions against the installed CLI. |
-| AC-03 | Run `tests/hook.sh` in a disposable Git repository with a clean working copy and failing staged playbook, then with a clean staged playbook and failing working copy. Confirm the index and source are unchanged. |
-| AC-04 | Lint workflows and examples using `actionlint`. Inspect the release gate and run the public fixture workflow when a feature push is approved. Report hosted and local evidence separately. |
+| AC-01 | Run `tests/check.sh` with a clean playbook, a lint-only violation, a missing module, an empty directory and config with a suppression or exclusion covering the violation. Assert the expected status and diagnostic for each failure. Compare tracked inputs before and after. |
+| AC-02 | Run `tests/setup.sh` with an exact Python lock and a corrupt hash. A playbook using a synthetic locked collection must pass, then fail when its archive is missing or corrupt. Run `tests/check.sh` with an unknown profile, an out-of-checkout path and a dynamic inventory fixture. A subprocess test asserts the use of controlled configuration and synthetic localhost inventory and the absence of an ambient credential sentinel. The callable workflow verifies reported versions against the installed CLI. |
+| AC-03 | Run `tests/hook.sh` in a disposable Git repository with a clean working copy and failing staged playbook, then with a clean staged playbook and failing working copy. Verify an unrelated stage skips lint and a shared configuration change selects all affected scopes. Confirm the index and source are unchanged. |
+| AC-04 | Lint workflows and examples with `actionlint`. Test the release gate on synthetic Git refs: default-branch push after passing fixtures and an existing exact stable recovery tag at the tested commit are eligible; PRs, failing fixtures, branches on dispatch, and a tag pointing to another commit cannot publish. Hosted fixture evidence remains separate from local checks. |
 
 ## Tasks
 
