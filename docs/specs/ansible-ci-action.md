@@ -1,6 +1,6 @@
 ---
-status: in-progress
-status_description: "Implementation is claimed on the feature branch."
+status: complete
+status_description: "Implementation and independent fixture review are complete."
 branch: feat/ansible-ci-action
 issue: https://github.com/vhco-pro/ansible-ci-action/issues/1
 goal: "Consumers can run the same production-profile Ansible checks locally and in GitHub Actions."
