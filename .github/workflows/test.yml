@@ -1,0 +1,78 @@
+name: Test
+on:
+  workflow_call:
+  pull_request:
+  push:
+    branches: [feat/ansible-ci-action]
+
+permissions: {}
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  workflows:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: docker://rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667
+      - name: Check shell scripts
+        uses: docker://koalaman/shellcheck:v0.11.0@sha256:61862eba1fcf09a484ebcc6feea46f1782532571a34ed51fedf90dd25f925a8d
+        with:
+          args: >-
+            --severity=warning
+            scripts/check.sh
+            scripts/release-mode.sh
+            scripts/setup-action.sh
+            scripts/setup.sh
+            tests/check.sh
+            tests/compare-action.sh
+            tests/hook.sh
+            tests/release.sh
+            tests/scope.sh
+            tests/setup.sh
+            examples/native-hook/.githooks/pre-commit
+      - run: tests/release.sh
+
+  fixtures:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - id: pass
+        uses: ./
+        with:
+          working-directory: tests/fixtures/pass
+      - id: fail
+        continue-on-error: true
+        uses: ./
+        with:
+          working-directory: tests/fixtures/fail
+      - id: native
+        run: scripts/setup-action.sh
+      - name: Compare action and local verdicts
+        env:
+          ANSIBLE_CI_PYTHON: ${{ steps.native.outputs.python }}
+          COMPOSITE_FAILURE: ${{ steps.fail.outcome }}
+          ACTION_PYTHON_VERSION: ${{ steps.pass.outputs.python-version }}
+          ACTION_CORE_VERSION: ${{ steps.pass.outputs.ansible-core-version }}
+          ACTION_LINT_VERSION: ${{ steps.pass.outputs.ansible-lint-version }}
+        run: tests/compare-action.sh
+      - name: Run native fixtures and staged hook
+        env:
+          ANSIBLE_CI_PYTHON: ${{ steps.native.outputs.python }}
+        run: |
+          tests/check.sh
+          tests/hook.sh
+          tests/scope.sh
+      - run: tests/setup.sh

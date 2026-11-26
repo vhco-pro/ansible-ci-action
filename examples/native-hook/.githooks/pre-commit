@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -euo pipefail
+workspace=$(git rev-parse --show-toplevel)
+cd -- "$workspace"
+scratch=$(mktemp)
+trap 'rm -f -- "$scratch"' EXIT
+git diff --cached --no-renames --name-only -z > "$scratch"
+[[ -s $scratch ]] || exit 0
+"${ANSIBLE_CI_CHECK:?Set ANSIBLE_CI_CHECK to the pinned check script.}" --staged
