@@ -119,6 +119,7 @@ None.
 | 2026-11-26 | R-12 | implementation | `cdafd6932e926c606ef829dc7888b10a4d472487` | unknown | procedural | All four criteria met. Python archive updates still require manual review. |
 | 2026-11-26 | R-13 | implementation | `4d5b84fd2ced82e9870591cb93fbed2e75bef23c` | unknown | procedural | All four criteria met. Public security onboarding findings are recorded below. |
 | 2026-11-26 | R-14 | implementation | `2b8efa933b9f4e55591a626c4c159ad2e8349e71` | unknown | procedural | All four criteria met. Shared security workflow findings remain open. |
+| 2026-11-26 | R-15 | implementation | `78bf1dcaa075590a7e5ca8f98ebd7bf26bb1ec9e` | unknown | procedural | All criteria met with the released CodeQL pin. |
 
 ### R-1
 
@@ -546,6 +547,45 @@ KIND: factual
 SEVERITY: should-fix
 WHERE: README.md:63-68, scripts/.tool-versions, scripts/python-archive.tsv, scripts/setup.sh:37-57, scripts/requirements.txt:1-2, renovate.json, Design tool pins, conventions/delivery.md#pinning-and-updates
 EVIDENCE: The documented manual update procedure pairs the Python version with the verified standalone archive build and digest and refreshed wheel lock. Renovate sees the Python version in .tool-versions, and its configured managers do not discover or coordinate the build and digest. https://docs.renovatebot.com/modules/manager/asdf/
+PROPOSAL: Make the archive dependency discoverable to the updater and coordinate the version, build, verified digest and generated lock in one reviewed change.
+
+### R-15
+
+CRITERION: AC-01 Clean Ansible content passes the production profile and syntax checks. Production-rule violations, syntax failures, suppressed checks on selected content and empty scopes fail.
+VERDICT: met
+EVIDENCE: Local tests/check.sh and tests/scope.sh passed on the export of 78bf1dcaa075590a7e5ca8f98ebd7bf26bb1ec9e. They exercised clean playbooks, handler-only roles and alternate task entry points, plus refusal for production-rule violations, strict warnings, invalid syntax, suppression and empty scopes. The exact hosted Test run 45877866273 passed these fixtures.
+
+CRITERION: AC-02 The action uses its exact dependency pins, reports installed versions and rejects an invalid profile, an escaping path, dynamic inventory or failed setup. Syntax checking uses isolated synthetic inventory without ambient configuration or credentials.
+VERDICT: met
+EVIDENCE: Exact Test run 45877866273 confirmed the expected negative composite outcome and matching direct-check outputs for Python 3.14.10, ansible-core 2.22.0 and ansible-lint 26.11.1. The hosted setup fixture completed a fresh installation and reported both the wrong archive checksum and wrong wheel hash refusals. Local tests/check.sh and tests/scope.sh passed the input refusals, locked archives and isolated environment checks.
+
+CRITERION: AC-03 The direct command and native hook share validation behavior. Hook checks skip unrelated staged files, select affected Ansible content and use the index snapshot. The source and index stay intact.
+VERDICT: met
+EVIDENCE: Local tests/hook.sh and tests/scope.sh passed on the exact commit. They checked partial staging, unrelated changes beside malformed YAML, staged JSON and imported task references, refusal for malformed affected roles, and source and index preservation. The hosted native fixture step passed at the same commit.
+
+CRITERION: AC-04 The repository contains synthetic read-only public fixtures, lintable workflows and shared GitVersion release wiring that requires passing fixture tests before tagging.
+VERDICT: met
+EVIDENCE: Exact Test run 45877866273 passed both jobs, including pinned actionlint, ShellCheck, and release-gate tests on synthetic refs. Local actionlint 1.7.12 and tests/release.sh passed. The read-only fixture gates the release ref check and the pinned GitVersion or recovery workflow path. GitHub's public stable v1.2.5 release tag resolves to 119c3c5c884b2b9a6529e741b239eac288942262, the SHA pinned by both CodeQL callers. Exact CodeQL run 45877866535 showed persist-credentials: false in both checkout logs, scanned 5 of 5 Actions files and 2 of 2 Python files, and stored both analyses. No Scorecard publication or release was exercised in this feature-branch review.
+
+FINDING: F-01
+KIND: factual
+SEVERITY: should-fix
+WHERE: .github/workflows/scorecard.yml, external vhco-pro/.github reusable-scorecard.yml at e03ad61274b2bf0738b36ed67dff1c376321fb64, conventions/github-actions.md#security and #execution
+EVIDENCE: The unchanged shared Scorecard workflow omits top-level permissions: {} and the analysis job omits an explicit timeout. The shared CodeQL v1.2.5 workflow pin now supplies the permission and timeout settings and disables checkout credential persistence for both scans.
+PROPOSAL: Apply the empty top-level permission set and an explicit timeout in the shared Scorecard workflow, then verify and adopt that released pin. Preserve the provider's restriction on top-level defaults.
+
+FINDING: F-02
+KIND: factual
+SEVERITY: nit
+WHERE: .github/workflows/codeql.yml Python job, external vhco-pro/.github reusable-codeql-js.yml at 119c3c5c884b2b9a6529e741b239eac288942262
+EVIDENCE: Exact hosted logs confirm Python coverage. The external wrapper still labels the job JS/TS and uploads the Python analysis under /language:js-ts. The Actions analysis uses its own category.
+PROPOSAL: Derive the shared wrapper's display name and analysis category from the language input when that dependency is revised.
+
+FINDING: F-03
+KIND: factual
+SEVERITY: should-fix
+WHERE: README.md:63-68, scripts/.tool-versions, scripts/python-archive.tsv, scripts/setup.sh:37-57, scripts/requirements.txt:1-2, renovate.json, Design tool pins, conventions/delivery.md#pinning-and-updates
+EVIDENCE: The unchanged manual procedure pairs the Python version with the verified standalone archive build and digest and refreshed wheel lock. Renovate sees the Python version in .tool-versions, and its configured managers do not discover or coordinate the build and digest. https://docs.renovatebot.com/modules/manager/asdf/
 PROPOSAL: Make the archive dependency discoverable to the updater and coordinate the version, build, verified digest and generated lock in one reviewed change.
 
 ## Sources
