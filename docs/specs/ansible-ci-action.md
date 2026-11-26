@@ -67,6 +67,51 @@ None.
 
 | Date | Review | Kind | Commit | Model | Isolation | Outcome |
 | --- | --- | --- | --- | --- | --- | --- |
+| 2026-11-26 | R-1 | spec | `d5bd9419c917b29030e37cf74d42c7a5b7a9abcd` | unknown | procedural | Inventory isolation and selected lint scope need explicit tests. |
+
+### R-1
+
+FINDING: F-01
+KIND: factual
+SEVERITY: blocking
+WHERE: Owner summary, Scope, Design inputs and lint invocation, AC-02, AC-03, AC-04, Test Plan
+EVIDENCE: The design leaves `fixture-inventory` optional and allows normal configuration discovery, but does not specify how the syntax subprocess is prevented from loading the project or operator's inventory and plugin settings. Ansible's default inventory plugins include `script` and `auto`, and ansible-lint documents `--offline` as disabling dependency installation and schema refreshing. It does not isolate subprocesses. The shared coding convention requires an allowlisted environment for user-supplied code. https://docs.ansible.com/projects/ansible/latest/plugins/inventory.html https://docs.ansible.com/projects/lint/configuring/
+PROPOSAL: Define a default synthetic inventory, the allowed static inventory formats, and an explicit isolated Ansible configuration and environment for all entry points. Add a refusal test for dynamic inventory and prove the syntax subprocess does not receive ambient credentials or operator configuration.
+
+FINDING: F-02
+KIND: factual
+SEVERITY: blocking
+WHERE: Owner summary, Design default profile and configuration discovery, AC-01, Test Plan AC-01
+EVIDENCE: AC-01 says production-rule violations and syntax failures fail. The design permits standard configuration discovery, and ansible-lint documents that `warn_list`, `skip_list`, `exclude_paths`, and the adjacent ignore file can alter those verdicts. Syntax check is unskippable for a playbook that is linted, but the config can exclude the playbook entirely. The clean and negative fixtures in the proof leave this conflict untested. https://docs.ansible.com/projects/lint/configuring/ https://docs.ansible.com/projects/lint/rules/syntax-check/
+PROPOSAL: Define which narrowly recorded compatibility exceptions may change a verdict and how the wrapper prevents a selected scope from being silently excluded. Use a fixture with configuration overrides to prove the accepted boundary.
+
+FINDING: F-03
+KIND: factual
+SEVERITY: should-fix
+WHERE: Design pinned dependencies, AC-02, Test Plan AC-02
+EVIDENCE: The design calls for installing approved pinned roles and collections when syntax needs them, but all three declared inputs concern scope, profile or inventory. It gives no source for the approved dependency set, no rule for transitive dependencies, and no expected behavior on a partial installation. The proposed corrupted-hash test can pass for the Python lock alone without exercising any Ansible content dependencies.
+PROPOSAL: Specify the dependency manifest or prepared dependency interface, how it pins transitive content, and how a failed setup discards partial state. Add a content fixture whose syntax succeeds with the locked dependency and fails when it is absent.
+
+FINDING: F-04
+KIND: factual
+SEVERITY: should-fix
+WHERE: Design staged hook, AC-03, Test Plan AC-03
+EVIDENCE: The owner summary promises checks for affected roles or playbooks while the design and proof only require using index content. A hook that scans the full repository on every commit satisfies the written proof, including when no staged path affects Ansible. The pinned infrastructure convention calls for quick checks for relevant staged paths and leaves dependency downloads to full verification.
+PROPOSAL: Define the hook's affected-scope rule, including what happens when shared config changes, and add an unrelated-staged-change case that proves it skips lint. Keep the index-versus-worktree cases.
+
+FINDING: F-05
+KIND: factual
+SEVERITY: should-fix
+WHERE: Design shared release wiring, AC-04, Test Plan AC-04
+EVIDENCE: The referenced reusable workflow defaults `dry-run` to false and gives its release job `contents: write`. The design does not define caller events, the exact-ref recovery guard, or serialization of publication runs. Inspecting only that tests gate the call can pass a release workflow that also calls it for unsuitable events. https://github.com/vhco-pro/gh-release-workflow/blob/b18de6d2f305f971afe01ba31e17bde5966b1567/.github/workflows/gh-release.yml
+PROPOSAL: State the events and refs that may publish, leave pull requests on the fixture path, and specify the exact-tag recovery and concurrency behavior required by the pinned GitHub Actions convention. Check those guards along with `needs` in AC-04.
+
+FINDING: F-06
+KIND: factual
+SEVERITY: should-fix
+WHERE: Context Background
+EVIDENCE: Background records a syntax probe and summarizes the convention. It does not say who experiences the problem, how often it recurs, or why a documented native local command and per-repository workflow do not meet the need.
+PROPOSAL: Describe the recurring maintenance or verdict drift for consuming repositories and why the reusable action is worth owning alongside the native command.
 
 ## Sources
 
