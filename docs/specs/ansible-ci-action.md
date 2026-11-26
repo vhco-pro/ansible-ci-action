@@ -47,7 +47,8 @@ Deliver one composite, its direct check script, native Git hook example, public 
 - [x] AC-01: Clean Ansible content passes the production profile and syntax checks. Production-rule violations, syntax failures, suppressed checks on selected content and empty scopes fail.
       Evidence: tests/check.sh passed clean content and refused warning-only Jinja, missing syntax dependency, lint suppression and empty scope.
 - [ ] AC-02: The action uses its exact dependency pins, reports installed versions and rejects an invalid profile, an escaping path, dynamic inventory or failed setup. Syntax checking uses isolated synthetic inventory without ambient configuration or credentials.
-- [ ] AC-03: The direct command and native hook share validation behavior. Hook checks skip unrelated staged files, select affected Ansible content and use the index snapshot. The source and index stay intact.
+- [x] AC-03: The direct command and native hook share validation behavior. Hook checks skip unrelated staged files, select affected Ansible content and use the index snapshot. The source and index stay intact.
+      Evidence: tests/hook.sh verified the staged verdict and preserved the index and worktree.
 - [ ] AC-04: The repository contains synthetic read-only public fixtures, lintable workflows and shared GitVersion release wiring that requires passing fixture tests before tagging.
 
 ## Test Plan
@@ -67,7 +68,8 @@ Deliver one composite, its direct check script, native Git hook example, public 
       Evidence: tests/setup.sh installed the pinned Python and hashed wheels and refused both an incorrect archive checksum and corrupted wheel hashes.
 - [x] T3 `scripts/check.sh` validates lint scope, fixture inventory and content locks. Run `tests/check.sh` (AC-01, AC-02).
       Evidence: tests/check.sh passed production-profile checks, syntax failures, scope and inventory refusals, credential isolation and locked collection checks.
-- [ ] T4 `examples/native-hook/` invokes the check on staged affected content. Run `tests/hook.sh` (AC-03).
+- [x] T4 `examples/native-hook/` invokes the check on staged affected content. Run `tests/hook.sh` (AC-03).
+      Evidence: tests/hook.sh exercised partial staging, ignored unrelated changes and checked all affected playbooks on a config change.
 - [ ] T5 `action.yml`, `.github/workflows/`, and `README.md` wire the fixture and release jobs. Run `tests/release.sh` and `actionlint`. Observe the composite on a public runner when authorized (AC-02, AC-04).
 
 ## Open Questions

@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+set -euo pipefail
+workspace=$(git rev-parse --show-toplevel)
+cd -- "$workspace"
+scratch=$(mktemp)
+trap 'rm -f -- "$scratch"' EXIT
+git diff --cached --no-renames --name-only -z > "$scratch"
+while IFS= read -r -d '' path; do
+  case "$path" in
+    .github/*) continue ;;
+    *.yml|*.yaml|*.ansible-lint|*.ansible-lint-ignore|.config/ansible-lint-ignore.txt|*ansible.cfg|ci/*|roles/*|*/roles/*|templates/*|*/templates/*|files/*|*/files/*)
+      "${ANSIBLE_CI_CHECK:?Set ANSIBLE_CI_CHECK to the pinned check script.}" --staged
+      exit 0
+      ;;
+  esac
+done < "$scratch"

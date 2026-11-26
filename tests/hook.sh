@@ -37,3 +37,14 @@ worktree=$(sha256sum play.yml)
 "$hook"
 test "$index" = "$(git write-tree)"
 test "$worktree" = "$(sha256sum play.yml)"
+
+cp pass play.yml
+cp fail another.yml
+git add -- play.yml another.yml
+git -c user.name='Synthetic fixture' -c user.email=fixture@example.invalid commit -q -m fixture
+printf '{}\n' > .ansible-lint
+git add -- .ansible-lint
+if "$hook"; then
+  printf 'Shared config change failed to check another.yml.\n' >&2
+  exit 1
+fi
