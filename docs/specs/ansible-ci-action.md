@@ -37,7 +37,7 @@ Deliver one composite, its direct check script, native Git hook example, public 
 
 - Inputs are `working-directory` (default `.`), `profile` (default `production`) and optional `fixture-inventory`. Discover the project lint configuration with the native config names. Use the requested profile explicitly and fail closed on config or ignore-file entries that suppress or exclude checks in the selected scope. Existing code can adopt the action by selecting the covered paths under its recorded baseline. Resolve selected playbooks and roles explicitly and refuse an empty set, unknown profile, or out-of-checkout path. The default inventory is synthetic localhost. An override must be a checkout-relative static YAML or INI fixture file. Reject dynamic inventory and inventory plugin configuration.
 - Use a pinned Python release and hash-locked Python packages for `ansible-core` and `ansible-lint`. For content dependencies, use a checkout-relative `ci/ansible-content.lock` when present. It lists each required local role or collection archive with an exact version and SHA-256, including transitive dependencies. Install the verified archives in private temporary directories with dependency fetching disabled. Missing or invalid required archives fail, and failed setup cleans up its temporary state. Use verified archive downloads, expose the resolved `python-version`, `ansible-core-version` and `ansible-lint-version` via `GITHUB_OUTPUT`, and fail on dependency errors. Keep pins discoverable to the dependency updater.
-- Run `ansible-lint --offline --profile production` by default with unskipped syntax validation. Run the linter and inherited syntax subprocess with an allowlisted process environment, run-owned HOME, explicit generated Ansible config, and only the static YAML and INI inventory plugins. Keep the operator's Ansible config, inventory, plugin settings and credentials out of those processes. Use local verification for trusted checkouts because project content can include executable plugins. Document the direct `ansible-playbook --syntax-check -i <fixture-inventory> <playbook>` command. Document `ansible-doc` for installed module contracts.
+- Run `ansible-lint --offline --strict --profile production` by default with unskipped syntax validation. Strict mode makes warnings in the selected profile block the check. Run the linter and inherited syntax subprocess with an allowlisted process environment, run-owned HOME, explicit generated Ansible config, and only the static YAML and INI inventory plugins. Keep the operator's Ansible config, inventory, plugin settings and credentials out of those processes. Use local verification for trusted checkouts because project content can include executable plugins. Document the direct `ansible-playbook --syntax-check -i <fixture-inventory> <playbook>` command. Document `ansible-doc` for installed module contracts.
 - Both the composite and caller verification use the same shell script. Provide a native pre-commit example that checks affected roles or entry-point playbooks from the index snapshot with prepared dependencies. An unrelated staged change skips lint. A change to shared configuration, inventory, content locks or dependencies selects every Ansible scope affected by it. Full local verification can call caller-owned Molecule scenarios for convergence, idempotence and behavior assertions on disposable targets.
 - A callable fixture workflow runs on Ubuntu 24.04 with read-only contents permission and disabled checkout credential persistence. SHA-pin external actions with release comments. A default-branch push can call the shared GitVersion workflow after the fixtures pass. Pull requests run the fixtures with read-only permissions. Manual recovery accepts only an existing exact stable version tag that resolves to the tested commit. After the same fixture gate, recovery calls the shared GitHub Release action for that exact tag. Serialize publication across push and recovery runs and preserve existing releases.
 
@@ -52,7 +52,7 @@ Deliver one composite, its direct check script, native Git hook example, public 
 
 | Criterion | Proof |
 | --- | --- |
-| AC-01 | Run `tests/check.sh` with a clean playbook, a lint-only violation, a missing module, an empty directory and config with a suppression or exclusion covering the violation. Assert the expected status and diagnostic for each failure. Compare tracked inputs before and after. |
+| AC-01 | Run `tests/check.sh` with a clean playbook, a lint-only violation, a missing module, an empty directory and config with a suppression or exclusion covering the violation. A collection fixture with a plugin nested below `plugins/modules/` must fail on `fqcn[deep]` even though Ansible-lint normally reports it as a warning. Assert the expected status and diagnostic for each failure. Compare tracked inputs before and after. |
 | AC-02 | Run `tests/setup.sh` with an exact Python lock and a corrupt hash. A playbook using a synthetic locked collection must pass, then fail when its archive is missing or corrupt. Run `tests/check.sh` with an unknown profile, an out-of-checkout path and a dynamic inventory fixture. A subprocess test asserts the use of controlled configuration and synthetic localhost inventory and the absence of an ambient credential sentinel. The callable workflow verifies reported versions against the installed CLI. |
 | AC-03 | Run `tests/hook.sh` in a disposable Git repository with a clean working copy and failing staged playbook, then with a clean staged playbook and failing working copy. Verify an unrelated stage skips lint and a shared configuration change selects all affected scopes. Confirm the index and source are unchanged. |
 | AC-04 | Lint workflows and examples with `actionlint`. Test the release gate on synthetic Git refs: default-branch push after passing fixtures and an existing exact stable recovery tag at the tested commit are eligible; PRs, failing fixtures, branches on dispatch, and a tag pointing to another commit cannot publish. Hosted fixture evidence remains separate from local checks. |
@@ -70,6 +70,7 @@ None.
 | Date | Review | Kind | Commit | Model | Isolation | Outcome |
 | --- | --- | --- | --- | --- | --- | --- |
 | 2026-11-26 | R-1 | spec | `d5bd9419c917b29030e37cf74d42c7a5b7a9abcd` | unknown | procedural | Inventory isolation and selected lint scope need explicit tests. |
+| 2026-11-26 | R-2 | spec | `f6b110f692c5d18ceb9078232707429e9a2d37c5` | unknown | procedural | Production-profile warnings must fail. |
 
 ### R-1
 
@@ -114,6 +115,15 @@ SEVERITY: should-fix
 WHERE: Context Background
 EVIDENCE: Background records a syntax probe and summarizes the convention. It does not say who experiences the problem, how often it recurs, or why a documented native local command and per-repository workflow do not meet the need.
 PROPOSAL: Describe the recurring maintenance or verdict drift for consuming repositories and why the reusable action is worth owning alongside the native command.
+
+### R-2
+
+FINDING: F-01
+KIND: factual
+SEVERITY: blocking
+WHERE: Design lint invocation and suppression handling, AC-01, Test Plan AC-01
+EVIDENCE: The revision addressing R-1 F-02 rejects suppressions in project configuration and ignore files, but retains `ansible-lint --offline --profile production` without strict mode. Ansible-lint's own default warning list includes `fqcn[deep]`, a subrule of `fqcn` in the production profile. An unconfigured repository can therefore report a production-profile violation and exit zero despite AC-01 requiring failure. A negative fixture that uses a rule already treated as an error would miss this case. https://docs.ansible.com/projects/lint/usage/ https://docs.ansible.com/projects/lint/profiles/
+PROPOSAL: Require strict mode so warnings from selected rules fail without relying on project configuration. Add a clean-config fixture that trips a selected rule normally reported as a warning, and verify the wrapper fails on that diagnostic.
 
 ## Sources
 
