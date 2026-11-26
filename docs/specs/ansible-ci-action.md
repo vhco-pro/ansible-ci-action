@@ -70,7 +70,8 @@ Deliver one composite, its direct check script, native Git hook example, public 
       Evidence: tests/check.sh passed production-profile checks, syntax failures, scope and inventory refusals, credential isolation and locked collection checks.
 - [x] T4 `examples/native-hook/` invokes the check on staged affected content. Run `tests/hook.sh` (AC-03).
       Evidence: tests/hook.sh exercised partial staging, ignored unrelated changes and checked all affected playbooks on a config change.
-- [ ] T5 `action.yml`, `.github/workflows/`, and `README.md` wire the fixture and release jobs. Run `tests/release.sh` and `actionlint`. Observe the composite on a public runner when authorized (AC-02, AC-04).
+- [x] T5 `action.yml`, `.github/workflows/`, and `README.md` wire the fixture and release jobs. Run `tests/release.sh` and `actionlint`. Observe the composite on a public runner when authorized (AC-02, AC-04).
+      Evidence: actionlint, the release ref gate fixtures and direct pass and warning-only refusal cases passed locally with actual version outputs. Hosted composite execution remains pending.
 
 ## Open Questions
 

@@ -1,0 +1,39 @@
+name: Ansible CI
+description: Lint Ansible roles and playbooks with isolated syntax checks.
+branding:
+  icon: check-circle
+  color: red
+inputs:
+  working-directory:
+    description: Scope relative to the checkout.
+    default: .
+  profile:
+    description: Ansible-lint profile.
+    default: production
+  fixture-inventory:
+    description: Optional static YAML or INI inventory relative to the checkout.
+    default: ''
+outputs:
+  python-version:
+    description: Installed Python version.
+    value: ${{ steps.check.outputs.python-version }}
+  ansible-core-version:
+    description: Installed ansible-core version.
+    value: ${{ steps.check.outputs.ansible-core-version }}
+  ansible-lint-version:
+    description: Installed ansible-lint version.
+    value: ${{ steps.check.outputs.ansible-lint-version }}
+runs:
+  using: composite
+  steps:
+    - id: setup
+      shell: bash
+      run: '"$GITHUB_ACTION_PATH/scripts/setup-action.sh"'
+    - id: check
+      shell: bash
+      env:
+        ANSIBLE_CI_PYTHON: ${{ steps.setup.outputs.python }}
+        ANSIBLE_CI_WORKING_DIRECTORY: ${{ inputs.working-directory }}
+        ANSIBLE_CI_PROFILE: ${{ inputs.profile }}
+        ANSIBLE_CI_FIXTURE_INVENTORY: ${{ inputs.fixture-inventory }}
+      run: '"$GITHUB_ACTION_PATH/scripts/check.sh"'
