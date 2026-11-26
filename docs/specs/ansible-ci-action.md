@@ -101,6 +101,7 @@ None.
 | 2026-11-26 | R-5 | implementation | `0c8d87655b95c801ded036e6f717244d55ddf926` | unknown | procedural | Playbook selection, staged scope and local role archives need fixes. |
 | 2026-11-26 | R-6 | implementation | `332d1b9c00959571a22062490717d0a792c8c8bd` | unknown | procedural | Unrelated YAML and staged locked archives need fixes. |
 | 2026-11-26 | R-7 | implementation | `aebe22dddaece8190b838f35e1f1c2a5fdf9b9ed` | unknown | procedural | The staged scope missed a literal import. |
+| 2026-11-26 | R-8 | implementation | `b25012384abe82fe8c15d06aeb81eaee086cdeef` | unknown | procedural | Native criteria met. Hosted execution pending. |
 
 ### R-1
 
@@ -270,6 +271,24 @@ SEVERITY: should-fix
 WHERE: AC-03, scripts/check.py looks_like_tasks and select_targets
 EVIDENCE: The R-6 YAML relevance fix distinguishes unrelated lists by inspecting keys in the staged file. A referenced `setup.yml` containing a task with a short builtin module name has neither a recognized task key nor a fully qualified key. The selector skips that changed file even though `play.yml` statically imports it. The hook and staged wrapper exit 0 while direct verification exits 2 on the changed task.
 PROPOSAL: Recognize literal task references from selected plays when deciding staged relevance. Add an imported task outside the conventional dependency directories to the hook tests and keep the unrelated YAML list case passing.
+
+### R-8
+
+CRITERION: AC-01 Clean Ansible content passes the production profile and syntax checks. Production-rule violations, syntax failures, suppressed checks on selected content and empty scopes fail.
+VERDICT: met
+EVIDENCE: At b25012384abe82fe8c15d06aeb81eaee086cdeef, `tests/check.sh` passed the clean, strict lint, syntax, suppression and empty-scope cases. The malformed play, unrelated YAML stream and nested ignore regressions also passed.
+
+CRITERION: AC-02 The action uses its exact dependency pins, reports installed versions and rejects an invalid profile, an escaping path, dynamic inventory or failed setup. Syntax checking uses isolated synthetic inventory without ambient configuration or credentials.
+VERDICT: not verified
+EVIDENCE: At b25012384abe82fe8c15d06aeb81eaee086cdeef, the native input, isolated environment and locked role and collection checks passed. `scripts/setup.sh versions` reported Python 3.14.10, ansible-core 2.22.0 and ansible-lint 26.11.1. The installer, package pins and checksum tests are unchanged from the independently executed setup replay. Hosted composite outputs were not observed.
+
+CRITERION: AC-03 The direct command and native hook share validation behavior. Hook checks skip unrelated staged files, select affected Ansible content and use the index snapshot. The source and index stay intact.
+VERDICT: met
+EVIDENCE: At b25012384abe82fe8c15d06aeb81eaee086cdeef, `tests/hook.sh` and all nine `tests/scope.sh` cases passed. The literal import case produced the expected lint diagnostic through the direct, staged and hook entry points and verified the index was unchanged. The unrelated YAML, staged inventory, locked archive and partial staging cases passed.
+
+CRITERION: AC-04 The repository contains synthetic read-only public fixtures, lintable workflows and shared GitVersion release wiring that requires passing fixture tests before tagging.
+VERDICT: not verified
+EVIDENCE: At b25012384abe82fe8c15d06aeb81eaee086cdeef, actionlint 1.7.12 and `tests/release.sh` passed. Workflow inspection confirmed read-only fixture jobs with checkout credentials disabled and a fixture gate before either publication path. Hosted fixture execution was not observed.
 
 ## Sources
 
