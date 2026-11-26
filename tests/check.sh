@@ -32,6 +32,7 @@ git -C "$scratch/tree" add -- play.yml
 before=$(snapshot)
 check
 test "$(snapshot)" = "$before"
+"$ANSIBLE_CI_PYTHON" -I "$repo/tests/environment.py" "$repo/scripts/check.py"
 cp -- "$scratch/tree/play.yml" "$scratch/play.yml"
 sed -i 's/{{ message }}/{{message}}/' "$scratch/tree/play.yml"
 (cd "$scratch/tree"; "${ANSIBLE_CI_PYTHON%/*}/ansible-lint" --offline --profile production play.yml) >"$scratch/native" 2>&1
@@ -87,3 +88,5 @@ git -C "$scratch/tree" add -- ci
 check
 printf 'corrupt\n' >"$scratch/tree/$archive"
 refuse 'checksum' check
+rm -- "$scratch/tree/$archive"
+refuse "Tracked path is missing" check
